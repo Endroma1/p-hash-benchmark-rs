@@ -1,24 +1,34 @@
+use std::path::PathBuf;
+
 use error::ModifyError;
 use image::DynamicImage;
 use modification::{ImageModification, get_modification};
-use std::path::PathBuf;
-
-pub trait ModifyProcess {
-    fn modify_img(&self) -> Result<(), ModifyError>;
-}
 
 pub struct ModifyImage<'a> {
     pub img: DynamicImage,
     pub modification_name: &'a str,
-    pub save_path: PathBuf,
 }
 
-impl<'a> ModifyProcess for ModifyImage<'a> {
-    fn modify_img(&self) -> Result<(), ModifyError> {
-        let mod_img = get_modification(self.modification_name).map(|m| m.apply(&self.img))?;
-        mod_img.save(&self.save_path)?;
-        Ok(())
+impl<'a> ModifyImage<'a> {
+    pub fn new(
+        img: &'a DynamicImage,
+        modification_name: &'a str,
+    ) -> Result<ModifyImage<'a>, ModifyError> {
+        let mod_img = modify_img(&img, modification_name)?;
+
+        Ok(ModifyImage {
+            img: mod_img,
+            modification_name,
+        })
     }
+
+    pub fn save(&self, save_path: PathBuf) -> Result<(), ModifyError> {
+        Ok(self.img.save(save_path)?)
+    }
+}
+
+fn modify_img(img: &DynamicImage, modification_name: &str) -> Result<DynamicImage, ModifyError> {
+    Ok(get_modification(modification_name).map(|m| m.apply(img))?)
 }
 
 mod error {
