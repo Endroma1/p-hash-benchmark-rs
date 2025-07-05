@@ -1,8 +1,18 @@
 mod hashing_method {
     use image::DynamicImage;
 
+    trait Hash {
+        fn to_hex(&self) -> String;
+    }
+
+    impl Hash for imagehash::Hash {
+        fn to_hex(&self) -> String {
+            hex::encode(self.to_bytes())
+        }
+    }
+
     trait ImageHash {
-        fn hash(&self, img: &DynamicImage) -> String;
+        fn hash(&self, img: &DynamicImage) -> imagehash::Hash;
     }
 
     mod ahash {
@@ -14,14 +24,11 @@ mod hashing_method {
         }
 
         impl<'a> ImageHash for AverageHash<'a> {
-            fn hash(&self, img: &DynamicImage) -> String {
-                let hash_bytes = imagehash::AverageHash::new()
+            fn hash(&self, img: &DynamicImage) -> imagehash::Hash {
+                imagehash::AverageHash::new()
                     .with_image_size(self.hash_len, self.hash_len)
                     .with_hash_size(self.hash_len, self.hash_len)
                     .hash(img)
-                    .to_bytes();
-
-                hex::encode(hash_bytes)
             }
         }
     }
