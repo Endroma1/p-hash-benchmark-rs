@@ -1,6 +1,7 @@
+use imagehash::{AverageHash, HashMethod};
 use modify_image::ModifyImage;
 use std::env;
-mod hash_image;
+mod imagehash;
 mod modify_image;
 
 fn main() {
@@ -21,4 +22,9 @@ fn main() {
         Ok(()) => println!("Modified image"),
         Err(e) => println!("{e}"),
     }
+
+    let hasher = AverageHash::new();
+    let hash = hasher.hash(img);
+    let hex = hash.to_hex();
+    println!("{}", hex)
 }

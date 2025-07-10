@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bitvec = "1.0.1"
 hex = "0.4.3"
 image = "0.24.9"
-imagehash = "0.3.0"
+rustdct = "0.7.1"
