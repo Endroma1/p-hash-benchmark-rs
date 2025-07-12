@@ -1,8 +1,8 @@
 use imagehash::{AverageHash, HashMethod};
-use modify_image::ModifyImage;
+use imagemodify::modification::{Blur, ImageModification};
 use std::env;
 mod imagehash;
-mod modify_image;
+mod imagemodify;
 
 fn main() {
     let path = env::current_dir()
@@ -15,12 +15,12 @@ fn main() {
         .expect("Failed to get current directory")
         .join("test_mod_img.png");
 
-    let mod_img = ModifyImage::new(&img, "rotate");
-    let status = mod_img.and_then(|m| m.save(save_path));
-
-    match status {
-        Ok(()) => println!("Modified image"),
-        Err(e) => println!("{e}"),
+    let modifier = Blur::new();
+    let mod_img = modifier.apply(&img);
+    let save_status = mod_img.save(save_path);
+    match save_status {
+        Ok(()) => println!("Saved image"),
+        Err(e) => println!("Could not save image {}", e),
     }
 
     let hasher = AverageHash::new();
