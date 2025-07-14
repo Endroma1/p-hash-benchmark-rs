@@ -1,10 +1,37 @@
+use clap::Parser;
 use imagehash::{AverageHash, HashMethod};
 use imagemodify::modification::{Blur, ImageModification};
+use p_hash_rust::Config;
 use std::env;
 mod imagehash;
 mod imagemodify;
+mod lib;
 
 fn main() {
+    let args = Args::parse();
+
+    if args.create_config {
+        println!("Creating default config");
+
+        let path = Config::default_path();
+
+        let config = Config::create_default(&path);
+
+        match config {
+            Ok(()) => println!("Created config to path {:?}", path),
+            Err(e) => println!("Failed to create config, {}", e),
+        }
+    }
+}
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    create_config: bool,
+}
+
+fn test() {
     let path = env::current_dir()
         .expect("Failed to get current directory")
         .join("images")
