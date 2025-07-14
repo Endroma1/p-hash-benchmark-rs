@@ -1,4 +1,9 @@
+// Currently a lot of boilerplate. Needs to be macroed
+use std::collections::HashMap;
+
+use error::ModifyError;
 use image::DynamicImage;
+use modification::{Blur, Modification};
 
 mod error {
 
@@ -25,8 +30,54 @@ mod error {
     }
 }
 
+#[derive(Default)]
+struct Modifications {
+    methods: HashMap<&'static str, Modification>,
+}
+
+impl Modifications {
+    fn new() -> Self {
+        Modifications::default()
+    }
+    fn add(mut self, name: &'static str, modification: Modification) -> Self {
+        self.methods.insert(name, modification);
+        self
+    }
+
+    fn load() -> Self {
+        Modifications::new().add("blur", Modification::Blur(Blur::default()))
+    }
+
+    fn get(&self, name: &str) -> Result<&Modification, ModifyError> {
+        let modification = self.methods.get(name);
+
+        match modification {
+            Some(m) => Ok(m),
+            None => Err(ModifyError::UnknownModification(format!(
+                "Failed to get modification {}",
+                name
+            ))),
+        }
+    }
+}
+
 pub mod modification {
+
     use super::DynamicImage;
+
+    pub enum Modification {
+        Blur(Blur),
+        Rotate(Rotate),
+    }
+
+    impl Modification {
+        fn apply(&self, img: &DynamicImage) -> DynamicImage {
+            match self {
+                Modification::Blur(blur) => blur.apply(img),
+                Modification::Rotate(rotate) => rotate.apply(img),
+            }
+        }
+    }
 
     pub trait ImageModification: Default {
         fn apply(&self, img: &DynamicImage) -> DynamicImage;
