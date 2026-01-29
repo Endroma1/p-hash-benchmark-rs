@@ -1,0 +1,11 @@
+[package]
+name = "p-hash"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+env_logger = "0.11.8"
+image = "0.25.9"
+log = "0.4.29"
+rayon = "1.11.0"
+walkdir = "2.5.0"
