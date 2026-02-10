@@ -5,7 +5,11 @@ edition = "2024"
 
 [dependencies]
 env_logger = "0.11.8"
-image = "0.25.9"
+image = "0.23.14"
+img_hash = "3.2.0"
+indicatif = {version = "0.18.3", features=["rayon"]}
 log = "0.4.29"
 rayon = "1.11.0"
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
+tokio = { version = "1.49.0", features = ["full"] }
 walkdir = "2.5.0"

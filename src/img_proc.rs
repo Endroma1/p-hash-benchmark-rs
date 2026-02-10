@@ -41,21 +41,30 @@ impl Image {
             user,
         })
     }
+    pub fn get_path(&self) -> &Path {
+        &self.path
+    }
+    pub fn get_user(&self) -> &str {
+        &self.user
+    }
 }
 
 pub struct Images {
-    images: Box<dyn Iterator<Item = Result<Image, Error>>>,
+    images: Box<dyn Iterator<Item = Result<Image, Error>> + Send>,
 }
 impl Images {
-    fn try_from_path(path: PathBuf) -> Self {
+    pub fn from_path(path: PathBuf) -> Self {
         let walker = WalkDir::new(path.clone())
             .into_iter()
             .filter_map(|r| r.ok())
             .filter(|e| e.path().is_file())
-            .map(move |e| Image::try_from_dir_entry(e, &path));
+            .map(move |e| Image::try_from_dir_entry(e, &path).map(|i| i));
         Self {
             images: Box::new(walker),
         }
+    }
+    pub fn get_images(&self) -> &dyn Iterator<Item = Result<Image, Error>> {
+        &*self.images
     }
 }
 impl Iterator for Images {
@@ -75,7 +84,7 @@ impl ImageReader {
         }
     }
     pub fn run(&self) -> Images {
-        Images::try_from_path(self.img_path.clone())
+        Images::from_path(self.img_path.clone())
     }
 }
 
@@ -89,57 +98,19 @@ pub enum ImageReadMessage {
     Error { err: Error },
     Quit,
 }
-pub struct ImageReadApp {
-    tx: Sender<ImageReadMessage>,
-    processed: Arc<Mutex<u32>>,
-}
-impl ImageReadApp {
-    pub fn new(tx: Sender<ImageReadMessage>) -> Self {
-        Self {
-            tx,
-            processed: Arc::new(Mutex::new(0)),
-        }
-    }
-    pub fn run(&mut self, path: PathBuf) -> JoinHandle<()> {
-        let processed = Arc::clone(&self.processed);
-        let tx = self.tx.clone();
-        let join_handle = spawn(move || {
-            let images = Images::try_from_path(path);
 
-            for image in images {
-                let message = match image {
-                    Ok(img) => ImageReadMessage::Image { image: img },
-                    Err(err) => ImageReadMessage::Error { err },
-                };
-
-                let res = tx.send(message);
-
-                if let Err(_) = res {
-                    log::error!("send for image reader failed, tunnel probably closed");
-                    break;
-                }
-                *processed.lock().unwrap() += 1;
-            }
-
-            tx.send(ImageReadMessage::Quit);
-        });
-        log::debug!("imageread app executed successfully");
-        join_handle
-    }
-    pub fn get_processed(&self) -> Arc<Mutex<u32>> {
-        Arc::clone(&self.processed)
-    }
-}
-
+#[derive(Debug, Clone)]
 pub enum Error {
     ParentNotFound { path: PathBuf },
     FileNameNotFound { path: PathBuf },
     InvalidUnicode { string: OsString },
-    WalkDir { err: walkdir::Error },
+    WalkDir { err: String },
 }
 impl From<walkdir::Error> for Error {
     fn from(value: walkdir::Error) -> Self {
-        Error::WalkDir { err: value }
+        Error::WalkDir {
+            err: value.to_string(),
+        }
     }
 }
 impl Display for Error {
