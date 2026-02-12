@@ -103,6 +103,16 @@ impl HashingMethod for VertGradient {
 pub struct Hash {
     hash: Box<[u8]>,
 }
+impl Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bit_string: String = self
+            .hash
+            .iter()
+            .map(|b| format!("{:08b}", b)) // format each byte as 8-bit binary
+            .collect();
+        write!(f, "{}", &bit_string)
+    }
+}
 
 #[derive(Debug)]
 pub struct HashResult {

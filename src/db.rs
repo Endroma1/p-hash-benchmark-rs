@@ -7,7 +7,7 @@ impl DB {
     pub fn new() -> Self {
         Self {}
     }
-    pub async fn create_db() -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn create_db() -> Result<(), sqlx::Error> {
         let pool = SqlitePool::connect_with(
             SqliteConnectOptions::from_str("sqlite:data.db")?.create_if_missing(true),
         )
@@ -18,7 +18,7 @@ impl DB {
         sqlx::query(
             "
             CREATE TABLE IF NOT EXISTS images (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             path TEXT NOT NULL,
             user TEXT NOT NULL
             );
@@ -67,6 +67,7 @@ impl DB {
             "
             CREATE TABLE IF NOT EXISTS hashes (
             id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            hash BLOB NOT NULL,
             mod_image_id INTEGER NOT NULL,
             hashing_method_id INTEGER NOT NULL,
             FOREIGN KEY (mod_image_id) REFERENCES modified_images(id),

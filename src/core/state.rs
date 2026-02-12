@@ -1,8 +1,14 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use sqlx::SqlitePool;
 
-use crate::{core::error::Error, img_hash, img_mod};
+use crate::{
+    core::{
+        error::Error,
+        images_processor::{PHashResult, PHashResults},
+    },
+    img_hash, img_mod, img_proc,
+};
 
 #[derive(Debug)]
 pub struct Hashes {
@@ -43,129 +49,134 @@ impl Hash {
     pub fn new(mod_img_id: u32, hash: img_hash::HashResult) -> Self {
         Self { mod_img_id, hash }
     }
+    pub fn mod_img_id(&self) -> u32 {
+        self.mod_img_id
+    }
+    pub fn hash(&self) -> &img_hash::HashResult {
+        &self.hash
+    }
 }
 
-pub struct PHashResult {
-    img_id: u32,
-    mod_imgs: ModifiedImages,
-    hashes: Hashes,
+#[derive(Default)]
+pub struct AppProcessResult {
+    imgs: Images,
+    phash_results: PHashResults,
 }
-
-impl PHashResult {
-    pub fn img_id(&self) -> u32 {
-        self.img_id
-    }
-    pub fn mod_imgs(&self) -> &ModifiedImages {
-        &self.mod_imgs
-    }
-    pub fn hashes(&self) -> &Hashes {
-        &self.hashes
-    }
-    pub fn new(img_id: u32, mod_imgs: ModifiedImages, hashes: Hashes) -> Self {
+impl AppProcessResult {
+    pub fn new(imgs: Images, res: PHashResults) -> Self {
         Self {
-            img_id,
-            mod_imgs,
-            hashes,
+            imgs,
+            phash_results: res,
         }
+    }
+    pub fn phash_results(&self) -> &PHashResults {
+        &self.phash_results
+    }
+    pub fn images(&self) -> &Images {
+        &self.imgs
+    }
+    pub fn get_results(&self) -> Vec<(u32, &img_proc::Image, &PHashResult)> {
+        let mut results = Vec::new();
+        for (id, img) in self.imgs.iter().enumerate() {
+            let res = self
+                .phash_results
+                .get(&(id as u32))
+                .expect("invalid id found");
+            results.push((id as u32, img, res));
+        }
+        results
     }
     pub async fn send_to_db(&self, pool: &SqlitePool) -> Result<(), Error> {
         let mut tx = pool.begin().await?;
-
-        for hash in self.hashes.into_iter() {
-            let img = self.mod_imgs.get_img(hash.mod_img_id)?;
-
-            let res = sqlx::query(
-                "
-        INSERT INTO modified_images ( image_id, modification_id) VALUES (?,?);
-            ",
-            )
-            .bind(self.img_id)
-            .bind(img.get_mod_id())
-            .execute(&mut *tx)
-            .await?;
-
-            let mod_img_id = res.last_insert_rowid();
-
+        for (id, img) in self.imgs.iter().enumerate() {
+            let path_str = img.get_path().to_string_lossy().to_string();
             sqlx::query(
                 "
-                INSERT INTO hashes (mod_image_id, hashing_method_id) VALUES (?,?);
-                ",
+            INSERT INTO images (id, path, user) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING;
+            ",
             )
-            .bind(mod_img_id)
-            .bind(hash.hash.hashing_method_id())
+            .bind(id as u32)
+            .bind(path_str)
+            .bind(img.get_user())
             .execute(&mut *tx)
             .await?;
         }
         tx.commit().await?;
+        self.phash_results.send_to_db(pool).await?;
         Ok(())
     }
 }
-
 #[derive(Debug, Default)]
-pub struct AppProcessResult {
-    mod_imgs: ModifiedImages,
-    hashes: Hashes,
+pub struct Images {
+    imgs: Vec<img_proc::Image>,
 }
-impl AppProcessResult {
-    pub fn set_mod_imgs(&mut self, val: ModifiedImages) {
-        self.mod_imgs = val
+impl Deref for Images {
+    type Target = Vec<img_proc::Image>;
+    fn deref(&self) -> &Self::Target {
+        &self.imgs
     }
-    pub fn set_hashes(&mut self, val: Hashes) {
-        self.hashes = val
+}
+impl From<Vec<img_proc::Image>> for Images {
+    fn from(value: Vec<img_proc::Image>) -> Self {
+        Self { imgs: value }
     }
-    pub fn mod_imgs(&self) -> &ModifiedImages {
-        &self.mod_imgs
+}
+#[derive(Debug)]
+pub struct ModifiedImage {
+    img_id: u32,
+    mod_img: img_mod::ModifiedImage,
+}
+impl ModifiedImage {
+    pub fn new(img_id: u32, mod_img: img_mod::ModifiedImage) -> Self {
+        Self { img_id, mod_img }
     }
-    pub fn mod_imgs_mut(&mut self) -> &mut ModifiedImages {
-        &mut self.mod_imgs
+}
+impl Deref for ModifiedImage {
+    type Target = img_mod::ModifiedImage;
+    fn deref(&self) -> &Self::Target {
+        &self.mod_img
     }
-
-    pub fn hashes(&self) -> &Hashes {
-        &self.hashes
+}
+impl DerefMut for ModifiedImage {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.mod_img
     }
-    pub fn hashes_mut(&mut self) -> &mut Hashes {
-        &mut self.hashes
-    }
-    pub fn into_mod_imgs(self) -> ModifiedImages {
-        self.mod_imgs
-    }
-    pub fn into_hashes(self) -> Hashes {
-        self.hashes
-    }
-    pub fn into_parts(self) -> (ModifiedImages, Hashes) {
-        (self.mod_imgs, self.hashes)
+}
+impl ModifiedImage {
+    pub fn img_id(&self) -> u32 {
+        self.img_id
     }
 }
 #[derive(Debug, Default)]
 pub struct ModifiedImages {
-    images: Vec<img_mod::ModifiedImage>,
+    images: Vec<ModifiedImage>,
 }
 impl ModifiedImages {
-    pub fn get_img(&self, id: u32) -> Result<&img_mod::ModifiedImage, Error> {
+    pub fn get_img(&self, id: u32) -> Result<&ModifiedImage, Error> {
         self.images
             .get(id as usize)
             .ok_or(Error::ModificationNotFound { id: id as usize })
     }
-    pub fn get_img_mut(&mut self, id: u32) -> Result<&mut img_mod::ModifiedImage, Error> {
+    pub fn get_img_mut(&mut self, id: u32) -> Result<&mut ModifiedImage, Error> {
         self.images
             .get_mut(id as usize)
             .ok_or(Error::ModificationNotFound { id: id as usize })
     }
 }
 impl Deref for ModifiedImages {
-    type Target = Vec<img_mod::ModifiedImage>;
+    type Target = Vec<ModifiedImage>;
     fn deref(&self) -> &Self::Target {
         &self.images
     }
 }
-impl From<Vec<img_mod::ModifiedImage>> for ModifiedImages {
-    fn from(value: Vec<img_mod::ModifiedImage>) -> Self {
+impl From<Vec<ModifiedImage>> for ModifiedImages {
+    fn from(value: Vec<ModifiedImage>) -> Self {
         Self { images: value }
     }
 }
 impl<'a> IntoIterator for &'a ModifiedImages {
-    type Item = &'a img_mod::ModifiedImage;
-    type IntoIter = std::slice::Iter<'a, img_mod::ModifiedImage>;
+    type Item = &'a ModifiedImage;
+    type IntoIter = std::slice::Iter<'a, ModifiedImage>;
     fn into_iter(self) -> Self::IntoIter {
         self.images.iter()
     }

@@ -1,7 +1,3 @@
-use std::fmt::Display;
-
-use sqlx::SqlitePool;
-
 pub mod core;
 pub mod db;
 pub mod img_hash;

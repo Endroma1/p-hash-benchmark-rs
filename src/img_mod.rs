@@ -1,29 +1,19 @@
-use std::{
-    collections::{HashMap, hash_map::Values},
-    fmt::Display,
-    path::Path,
-    sync::{
-        Arc,
-        mpsc::{Receiver, Sender},
-    },
-};
+use std::{collections::HashMap, fmt::Display, path::Path};
 
 use image::{
-    DynamicImage, ImageResult,
+    DynamicImage,
     imageops::{blur, unsharpen},
 };
 use image::{imageops::rotate180, io::Reader as ImageReader};
-use sqlx::{Encode, SqlitePool};
-
-use crate::img_proc::Image;
+use sqlx::SqlitePool;
 
 #[derive(Debug)]
 pub struct ModifiedImage {
     mod_id: ModificationID,
-    img: Option<DynamicImage>,
+    img: Option<image::DynamicImage>,
 }
 impl ModifiedImage {
-    fn try_new(img: DynamicImage, mod_id: ModificationID) -> Result<Self, Error> {
+    fn try_new(img: image::DynamicImage, mod_id: ModificationID) -> Result<Self, Error> {
         let modifications = Modifications::new();
         let modification = modifications
             .get_modification(mod_id)

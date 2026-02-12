@@ -3,25 +3,26 @@ use std::path::Path;
 use crate::{
     core::{
         error::Error,
-        state::{AppProcessResult, Hash, ModifiedImages},
+        images_processor::PHashResult,
+        state::{self, Hash, ModifiedImage, ModifiedImages},
     },
     img_hash::{HashingMethods, hash_images},
-    img_mod::{self, Modifications, modify_image},
+    img_mod::{Modifications, modify_image},
 };
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct AppProcess {
-    result: AppProcessResult,
+    result: PHashResult,
 }
 impl AppProcess {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn finish(self) -> AppProcessResult {
+    pub fn finish(self) -> PHashResult {
         self.result
     }
-    pub fn run(&mut self, img_path: &Path) -> Result<(), Error> {
-        let modified_images = Self::modify_image(img_path)?;
+    pub fn run(&mut self, img_path: &Path, img_id: u32) -> Result<(), Error> {
+        let modified_images = Self::modify_image(img_path, img_id)?;
         self.result.set_mod_imgs(modified_images);
 
         let ids = 0..self.result.mod_imgs().len();
@@ -33,7 +34,7 @@ impl AppProcess {
         }
         Ok(())
     }
-    fn modify_image(img_path: &Path) -> Result<ModifiedImages, Error> {
+    fn modify_image(img_path: &Path, img_id: u32) -> Result<ModifiedImages, Error> {
         let modifications = Modifications::new();
         let mod_ids = modifications.get_keys();
         let modified_images = match modify_image(img_path, mod_ids) {
@@ -49,8 +50,10 @@ impl AppProcess {
             }
             r.ok()
         });
+        let mod_imgs_state = modified_images.map(|i| ModifiedImage::new(img_id, i));
+
         Ok(ModifiedImages::from(
-            modified_images.collect::<Vec<img_mod::ModifiedImage>>(),
+            mod_imgs_state.collect::<Vec<state::ModifiedImage>>(),
         ))
     }
     fn hash_image(&mut self, mod_img_id: u32) -> Result<(), Error> {

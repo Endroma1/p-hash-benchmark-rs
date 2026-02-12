@@ -1,94 +1,107 @@
-use std::{path::Path, str::FromStr, sync::OnceLock};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::OnceLock,
+};
 
 use crate::{
     core::{
-        app_proc::AppProcess,
         error::Error,
         images_processor::{ImagesProcessor, RayonImagesProcessor},
-        state::PHashResult,
+        result_parser::{ResultParser, SqliteResultParser},
     },
-    db::DB,
-    img_hash::{HashingMethodID, HashingMethods, hash_images},
-    img_mod::{ModificationID, Modifications, modify_image, open_image},
-    img_proc::{self, Image, ImageReadMessage, Images},
+    img_hash::HashingMethods,
+    img_mod::Modifications,
+    img_proc::Images,
 };
-use sqlx::{
-    SqlitePool,
-    sqlite::{self, SqliteConnectOptions, SqlitePoolOptions},
-};
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
+
+#[derive(Default)]
+pub struct AppConfig {
+    imgs_path: Option<PathBuf>,
+    images_processor: Option<Box<dyn ImagesProcessor>>,
+    results_parser: Option<Box<dyn ResultParser>>,
+}
+impl AppConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn images_processor(&mut self, processor: Box<dyn ImagesProcessor>) -> &mut Self {
+        self.images_processor = Some(processor);
+        self
+    }
+    pub fn results_parser(&mut self, parser: Box<dyn ResultParser>) -> &mut Self {
+        self.results_parser = Some(parser);
+        self
+    }
+    pub fn images_path(&mut self, path: &Path) -> &mut Self {
+        self.imgs_path = Some(path.to_path_buf());
+        self
+    }
+    pub async fn finish(self) -> Result<App, Error> {
+        let path = match self.imgs_path {
+            Some(p) => p,
+            None => {
+                let home_dir = env::home_dir().ok_or(Error::HomeDirNotFound)?;
+                home_dir.join(".local/share/p-hash/images")
+            }
+        };
+        let images_processor = match self.images_processor {
+            Some(p) => p,
+            None => Box::new(RayonImagesProcessor::default()),
+        };
+        let results_parser = match self.results_parser {
+            Some(p) => p,
+            None => {
+                let pool = SqlitePool::connect_with(
+                    SqliteConnectOptions::from_str("sqlite:data.db")?.create_if_missing(true),
+                )
+                .await?;
+                Box::new(SqliteResultParser::new(pool))
+            }
+        };
+        Ok(App::new(&path, results_parser, images_processor))
+    }
+}
+
 pub struct App {
-    images: Vec<img_proc::Image>,
-    modifications: &'static Modifications,
-    hashing_methods: &'static HashingMethods,
+    imgs_path: PathBuf,
 
     images_processor: Box<dyn ImagesProcessor>,
+    results_parser: Box<dyn ResultParser>,
 }
 impl App {
-    pub fn new(path: &Path) -> Self {
-        let images = Images::from_path(path.to_path_buf());
+    pub fn new(
+        path: &Path,
+        results_parser: Box<dyn ResultParser>,
+        images_processor: Box<dyn ImagesProcessor>,
+    ) -> Self {
+        Self {
+            imgs_path: path.to_path_buf(),
+            images_processor,
+            results_parser,
+        }
+    }
+    pub async fn try_default() -> Result<Self, Error> {
+        AppConfig::default().finish().await
+    }
+    pub async fn run(&self) -> Result<(), Error> {
+        let images = Images::from_path(self.imgs_path.to_path_buf());
         let images = images
             .filter_map(|r| {
                 if let Err(e) = r.as_ref() {
-                    log::warn!("A image failed to process: {}", e);
+                    log::warn!("An image failed to process: {}", e);
                 }
                 r.ok()
             })
             .collect();
 
-        let modifications = get_modifications();
-        let hashing_methods = get_hashing_methods();
-        let images_processor = Box::new(RayonImagesProcessor::default());
-        Self {
-            images,
-            modifications,
-            hashing_methods,
-            images_processor,
-        }
-    }
-    pub async fn run(&self) -> Result<(), Error> {
-        let pool = SqlitePool::connect_with(
-            SqliteConnectOptions::from_str("sqlite:data.db")?.create_if_missing(true),
-        )
-        .await?;
-
         log::info!("starting image hashing");
-        let res = self.images_processor.run(&self.images);
+        let res = self.images_processor.run(images);
 
         log::info!("sending results to db");
-        self.send_to_db(res, &pool).await?;
-        Ok(())
-    }
-    async fn send_to_db(&self, results: Vec<PHashResult>, pool: &SqlitePool) -> Result<(), Error> {
-        log::debug!("sending modifications to db");
-        self.modifications.send_to_db(pool).await?;
-        log::debug!("sending hashing_methods to db");
-        self.hashing_methods.send_to_db(pool).await?;
-
-        log::debug!("results len : {}", results.len());
-        log::debug!("sending results to db");
-        for result in results {
-            let image = self
-                .images
-                .get(result.img_id() as usize)
-                .ok_or(Error::ImageNotFound {
-                    id: result.img_id() as usize,
-                })?;
-
-            let path_str = image.get_path().to_string_lossy().to_string();
-            log::debug!("inserting image with id {}", result.img_id());
-            sqlx::query(
-                "
-            INSERT INTO images (id, path, user) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING;
-            ",
-            )
-            .bind(result.img_id())
-            .bind(path_str)
-            .bind(image.get_user())
-            .execute(pool)
-            .await?;
-
-            result.send_to_db(pool).await?;
-        }
+        self.results_parser.parse(res).await?;
         Ok(())
     }
 }

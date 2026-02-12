@@ -2,9 +2,8 @@ use log::debug;
 use std::{
     ffi::OsString,
     fmt::Display,
+    ops::Deref,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, mpsc::Sender},
-    thread::{JoinHandle, spawn},
 };
 
 use walkdir::{DirEntry, WalkDir};
@@ -67,24 +66,16 @@ impl Images {
         &*self.images
     }
 }
+impl Deref for Images {
+    type Target = Box<dyn Iterator<Item = Result<Image, Error>> + Send>;
+    fn deref(&self) -> &Self::Target {
+        &self.images
+    }
+}
 impl Iterator for Images {
     type Item = Result<Image, Error>;
     fn next(&mut self) -> Option<Self::Item> {
         self.images.next()
-    }
-}
-struct ImageReader {
-    img_path: PathBuf,
-}
-
-impl ImageReader {
-    pub fn new(path: &Path) -> Self {
-        Self {
-            img_path: path.to_path_buf(),
-        }
-    }
-    pub fn run(&self) -> Images {
-        Images::from_path(self.img_path.clone())
     }
 }
 

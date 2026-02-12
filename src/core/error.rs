@@ -11,6 +11,7 @@ pub enum Error {
     ImageNotFound { id: usize },
     ImageHandleClosed,
     Sqlx { err: sqlx::Error },
+    HomeDirNotFound,
 }
 impl From<img_mod::Error> for Error {
     fn from(value: crate::img_mod::Error) -> Self {
@@ -40,6 +41,7 @@ impl Display for Error {
             Self::ImageNotFound { id } => write!(f, "Image with id {} not found", id),
             Self::ImageHandleClosed => write!(f, "Image handle closed before expected"),
             Self::Sqlx { err } => write!(f, "Sqlx Error: {}", err),
+            Self::HomeDirNotFound => write!(f, "Home dir not found"),
         }
     }
 }
