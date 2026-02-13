@@ -77,6 +77,20 @@ impl DB {
         )
         .execute(&mut *tx)
         .await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hamming_distance INTEGER,
+                hash_len INTEGER,
+                hash1_id INTEGER,
+                hash2_id INTEGER,
+                FOREIGN KEY (hash1_id) REFERENCES hashes(id),
+                FOREIGN KEY (hash2_id) REFERENCES hashes(id)
+                )",
+        )
+        .execute(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(())
     }

@@ -1066,6 +1066,7 @@ dependencies = [
  "indicatif",
  "log",
  "rayon",
+ "serde",
  "sqlx",
  "tokio",
  "walkdir",
