@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{img_mod, img_proc};
+use crate::{img_mod, img_proc, matching};
 
 #[derive(Debug)]
 pub enum Error {
@@ -12,6 +12,12 @@ pub enum Error {
     ImageHandleClosed,
     Sqlx { err: sqlx::Error },
     HomeDirNotFound,
+    MatchError { err: matching::error::Error },
+}
+impl From<matching::error::Error> for Error {
+    fn from(value: matching::error::Error) -> Self {
+        Self::MatchError { err: value }
+    }
 }
 impl From<img_mod::Error> for Error {
     fn from(value: crate::img_mod::Error) -> Self {
@@ -42,6 +48,7 @@ impl Display for Error {
             Self::ImageHandleClosed => write!(f, "Image handle closed before expected"),
             Self::Sqlx { err } => write!(f, "Sqlx Error: {}", err),
             Self::HomeDirNotFound => write!(f, "Home dir not found"),
+            Self::MatchError { err } => write!(f, "Error when matching: {}", err),
         }
     }
 }

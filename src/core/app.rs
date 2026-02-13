@@ -14,6 +14,7 @@ use crate::{
     img_hash::HashingMethods,
     img_mod::Modifications,
     img_proc::Images,
+    matching::match_process::{PipelineRunner, SqliteRunner},
 };
 use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 
@@ -51,17 +52,21 @@ impl AppConfig {
             Some(p) => p,
             None => Box::new(RayonImagesProcessor::default()),
         };
+        let pool = SqlitePool::connect_with(
+            SqliteConnectOptions::from_str("sqlite:data.db")?.create_if_missing(true),
+        )
+        .await?;
         let results_parser = match self.results_parser {
             Some(p) => p,
-            None => {
-                let pool = SqlitePool::connect_with(
-                    SqliteConnectOptions::from_str("sqlite:data.db")?.create_if_missing(true),
-                )
-                .await?;
-                Box::new(SqliteResultParser::new(pool))
-            }
+            None => Box::new(SqliteResultParser::new(pool.clone())),
         };
-        Ok(App::new(&path, results_parser, images_processor))
+        let match_process = Box::new(SqliteRunner::new(pool.clone()));
+        Ok(App::new(
+            &path,
+            results_parser,
+            images_processor,
+            match_process,
+        ))
     }
 }
 
@@ -70,17 +75,20 @@ pub struct App {
 
     images_processor: Box<dyn ImagesProcessor>,
     results_parser: Box<dyn ResultParser>,
+    match_process: Box<dyn PipelineRunner>,
 }
 impl App {
     pub fn new(
         path: &Path,
         results_parser: Box<dyn ResultParser>,
         images_processor: Box<dyn ImagesProcessor>,
+        match_process: Box<dyn PipelineRunner>,
     ) -> Self {
         Self {
             imgs_path: path.to_path_buf(),
             images_processor,
             results_parser,
+            match_process,
         }
     }
     pub async fn try_default() -> Result<Self, Error> {
@@ -102,6 +110,8 @@ impl App {
 
         log::info!("sending results to db");
         self.results_parser.parse(res).await?;
+        self.match_process.run().await?;
+
         Ok(())
     }
 }
