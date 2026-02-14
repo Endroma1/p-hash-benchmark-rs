@@ -53,7 +53,9 @@ impl AppConfig {
             None => Box::new(RayonImagesProcessor::default()),
         };
         let pool = SqlitePool::connect_with(
-            SqliteConnectOptions::from_str("sqlite:data.db")?.create_if_missing(true),
+            SqliteConnectOptions::from_str("sqlite:data.db")?
+                .create_if_missing(true)
+                .pragma("cache_size", "200000"),
         )
         .await?;
         let results_parser = match self.results_parser {
@@ -99,16 +101,16 @@ impl App {
         let images = images
             .filter_map(|r| {
                 if let Err(e) = r.as_ref() {
-                    log::warn!("An image failed to process: {}", e);
+                    tracing::warn!("An image failed to process: {}", e);
                 }
                 r.ok()
             })
             .collect();
 
-        log::info!("starting image hashing");
+        tracing::info!("starting image hashing");
         let res = self.images_processor.run(images);
 
-        log::info!("sending results to db");
+        tracing::info!("sending results to db");
         self.results_parser.parse(res).await?;
         self.match_process.run().await?;
 

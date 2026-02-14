@@ -46,6 +46,7 @@ impl DerefMut for Matches {
         &mut self.matches
     }
 }
+#[derive(Debug)]
 pub struct Match {
     hash_id1: u32,
     hash_id2: u32,
@@ -69,7 +70,7 @@ impl Match {
         &self.hamming_distance
     }
 }
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct HammingDistance {
     distance: u32,
     entry_length: u32,

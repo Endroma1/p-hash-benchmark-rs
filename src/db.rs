@@ -17,6 +17,17 @@ impl DB {
 
         sqlx::query(
             "
+            CREATE TABLE IF NOT EXISTS runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp INTEGER NOT NULL
+            )
+            ",
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            "
             CREATE TABLE IF NOT EXISTS images (
             id INTEGER PRIMARY KEY,
             path TEXT NOT NULL,

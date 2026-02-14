@@ -1,7 +1,14 @@
-use async_trait::async_trait;
-use sqlx::SqlitePool;
+use std::sync::mpsc::Receiver;
 
-use crate::matching::{error::Error, state::Matches};
+use async_trait::async_trait;
+use indicatif::{ProgressBar, ProgressStyle};
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
+use tokio::task::{self};
+
+use crate::matching::{
+    error::Error,
+    state::{Match, Matches},
+};
 
 #[async_trait]
 pub trait MatchResultParser: Sync + Send {
@@ -10,17 +17,19 @@ pub trait MatchResultParser: Sync + Send {
     async fn parse(&self, results: Self::Result) -> Result<(), Self::Error>;
 }
 
-pub struct SqliteResultParser {
+// Takes a Receiver<Hash> and sends each entry to DB. Use SqliteResultParser to pars Matches
+// instead.
+pub struct RcSqliteResultParser {
     pool: SqlitePool,
 }
-impl SqliteResultParser {
+impl RcSqliteResultParser {
     pub fn from_pool(pool: SqlitePool) -> Self {
         Self { pool }
     }
 }
-impl MatchResultParser for SqliteResultParser {
+impl MatchResultParser for RcSqliteResultParser {
     type Error = Error;
-    type Result = Matches;
+    type Result = Receiver<Match>;
     fn parse<'life0, 'async_trait>(
         &'life0 self,
         results: Self::Result,
@@ -36,9 +45,83 @@ impl MatchResultParser for SqliteResultParser {
         Self: 'async_trait,
     {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await?;
-            for result in results.iter() {
-                sqlx::query("
+            tracing::debug!("starting parser");
+            let mut stop = false;
+            let batch_size = 8000; // reaching limit for sqlite
+            loop {
+                let mut batch = Vec::with_capacity(10_000);
+                while let Ok(m) = results.recv() {
+                    batch.push(m);
+                    if batch.len() >= batch_size {
+                        break;
+                    }
+                }
+                if batch.len() < batch_size {
+                    stop = true;
+                }
+
+                let pool = self.pool.clone();
+                let mut query: QueryBuilder<Sqlite> = QueryBuilder::new(
+                    "INSERT INTO matches (hamming_distance, hash_len, hash1_id, hash2_id) ",
+                );
+                query.push_values(batch.iter(), |mut b, m| {
+                    b.push_bind(m.hamming_distance().distance())
+                        .push_bind(m.hamming_distance().entry_length())
+                        .push_bind(m.hash_id1())
+                        .push_bind(m.hash_id2());
+                });
+                query.build().execute(&pool).await?;
+
+                if stop {
+                    tracing::debug!("match result parser exiting");
+                    break;
+                }
+            }
+
+            Ok(())
+        })
+    }
+}
+pub struct SqliteResultParser {
+    pool: SqlitePool,
+}
+impl SqliteResultParser {
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+impl MatchResultParser for SqliteResultParser {
+    type Error = Error;
+    type Result = Matches;
+    fn parse<'life0, 'async_trait>(
+        &'life0 self,
+        mut results: Self::Result,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = Result<(), Self::Error>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            let style =
+                ProgressStyle::with_template("[{elapsed_precise} | {eta_precise}] Sending matches to DB: {pos:>7}/{len:7} {percent}%")
+                    .unwrap()
+                    .progress_chars("##-");
+
+            let pb = ProgressBar::new(results.len() as u64).with_style(style);
+            while !results.is_empty() {
+                let chunk: Vec<Match> = results.drain(..10_000).collect();
+                let mut tx = self.pool.begin().await?;
+                let pb = pb.clone();
+
+                task::spawn(async move {
+                    for result in chunk.iter() {
+                        sqlx::query("
                     INSERT INTO matches (hamming_distance, hash_len, hash1_id, hash2_id) VALUES (?,?,?,?)
                     ")
                     .bind(result.hamming_distance().distance())
@@ -46,9 +129,13 @@ impl MatchResultParser for SqliteResultParser {
                     .bind(result.hash_id1())
                     .bind( result.hash_id2())
                     .execute(&mut *tx)
-                    .await?;
+                    .await.unwrap();
+
+                        pb.inc(1);
+                    }
+                    tx.commit().await.unwrap();
+                });
             }
-            tx.commit().await?;
             Ok(())
         })
     }

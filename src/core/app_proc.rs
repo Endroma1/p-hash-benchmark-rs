@@ -29,7 +29,7 @@ impl AppProcess {
 
         for id in ids {
             if let Err(e) = self.hash_image(id as u32) {
-                log::error!("failed to hash an image {e}")
+                tracing::error!("failed to hash an image {e}")
             }
         }
         Ok(())
@@ -46,7 +46,7 @@ impl AppProcess {
 
         let modified_images = modified_images.filter_map(|r| {
             if let Err(e) = r.as_ref() {
-                log::warn!("could not modify a image: {}", e);
+                tracing::warn!("could not modify a image: {}", e);
             }
             r.ok()
         });
@@ -70,7 +70,7 @@ impl AppProcess {
         hash_images(img.clone(), hashing_method_ids)
             .filter_map(|r| {
                 if let Err(e) = r.as_ref() {
-                    log::warn!("could not hash an image: {}", e);
+                    tracing::warn!("could not hash an image: {}", e);
                 }
                 r.ok()
             })

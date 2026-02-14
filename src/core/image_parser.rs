@@ -14,7 +14,7 @@ impl ImageParser for AppProcParser {
         let mut app_proc = AppProcess::new();
         let res = app_proc.run(image.get_path(), id);
         if let Err(e) = res {
-            log::error!("app proc failed with error {}", e);
+            tracing::error!("app proc failed with error {}", e);
         }
         let proc_res = app_proc.finish();
         proc_res

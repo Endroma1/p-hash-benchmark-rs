@@ -4,7 +4,7 @@ use std::{
 };
 
 use crossbeam::channel::unbounded;
-use indicatif::{ParallelProgressIterator, ProgressBar};
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use sqlx::SqlitePool;
 
@@ -27,9 +27,15 @@ pub struct RayonImagesProcessor {
 impl ImagesProcessor for RayonImagesProcessor {
     fn run(&self, images: Vec<Image>) -> AppProcessResult {
         let (s, r) = unbounded();
+        let style = ProgressStyle::with_template(
+            "[{elapsed_precise} | {eta_precise}] Processing images: {pos:>7}/{len:7} {percent}%",
+        )
+        .unwrap()
+        .progress_chars("##-");
+
         images
             .par_iter()
-            .progress_with(ProgressBar::new(images.len() as u64))
+            .progress_with(ProgressBar::new(images.len() as u64).with_style(style))
             .enumerate()
             .map(move |(id, image)| {
                 let res = self.image_parser.run(image, id as u32);
@@ -37,7 +43,7 @@ impl ImagesProcessor for RayonImagesProcessor {
             })
             .for_each(|r| {
                 if let Err(e) = r {
-                    log::warn!("failed to send result through channel, err: {}", e);
+                    tracing::warn!("failed to send result through channel, err: {}", e);
                 }
             });
 
@@ -78,7 +84,7 @@ impl PHashResults {
             for hash in res.hashes.into_iter() {
                 let img = res.mod_imgs.get_img(hash.mod_img_id())?;
 
-                log::debug!(
+                tracing::debug!(
                     "Inserting mod_img with images_id: {}, modification_id: {}",
                     id,
                     img.get_mod_id()

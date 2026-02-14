@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use indicatif::ProgressIterator;
 use sqlx::SqlitePool;
 
 use crate::{
@@ -7,8 +6,8 @@ use crate::{
     matching::{
         error::Error,
         fetcher::{ResultsFetcher, SqliteFetcher},
-        processor::{MatchProcessor, UniquePairMatcher},
-        result_parser::{MatchResultParser, SqliteResultParser},
+        processor::{MatchProcessor, ThreadedUniquePairMatcher},
+        result_parser::{MatchResultParser, RcSqliteResultParser},
     },
 };
 
@@ -30,8 +29,8 @@ impl<E, M, R> MatchPipeline<E, M, R> {
         }
     }
     pub async fn execute(&self) -> Result<(), E> {
-        for id in get_hashing_methods().get_keys().iter().progress() {
-            let fetch_res = self.fetcher.fetch(*id).await?;
+        for id in get_hashing_methods().get_keys() {
+            let fetch_res = self.fetcher.fetch(id).await?;
             let processor_res = self.processor.process(fetch_res)?;
             self.parser.parse(processor_res).await?;
         }
@@ -67,8 +66,8 @@ impl PipelineRunner for SqliteRunner {
     {
         Box::pin(async move {
             let fetcher = Box::new(SqliteFetcher::new(self.pool.clone()));
-            let processor = Box::new(UniquePairMatcher::default());
-            let parser = Box::new(SqliteResultParser::from_pool(self.pool.clone()));
+            let processor = Box::new(ThreadedUniquePairMatcher::default());
+            let parser = Box::new(RcSqliteResultParser::from_pool(self.pool.clone()));
 
             let pipeline = MatchPipeline::new(fetcher, processor, parser);
 

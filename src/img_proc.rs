@@ -1,10 +1,10 @@
-use log::debug;
 use std::{
     ffi::OsString,
     fmt::Display,
     ops::Deref,
     path::{Path, PathBuf},
 };
+use tracing::debug;
 
 use walkdir::{DirEntry, WalkDir};
 #[derive(Debug, Clone)]
