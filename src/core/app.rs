@@ -1,5 +1,5 @@
 use std::{
-    env,
+    env::home_dir,
     path::{Path, PathBuf},
     str::FromStr,
     sync::OnceLock,
@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     core::{
+        app_builder::{AppBuilder, Missing},
         error::Error,
         images_processor::{ImagesProcessor, RayonImagesProcessor},
         result_parser::{ResultParser, SqliteResultParser},
@@ -17,60 +18,6 @@ use crate::{
     matching::match_process::{PipelineRunner, SqliteRunner},
 };
 use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
-
-#[derive(Default)]
-pub struct AppConfig {
-    imgs_path: Option<PathBuf>,
-    images_processor: Option<Box<dyn ImagesProcessor>>,
-    results_parser: Option<Box<dyn ResultParser>>,
-}
-impl AppConfig {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn images_processor(&mut self, processor: Box<dyn ImagesProcessor>) -> &mut Self {
-        self.images_processor = Some(processor);
-        self
-    }
-    pub fn results_parser(&mut self, parser: Box<dyn ResultParser>) -> &mut Self {
-        self.results_parser = Some(parser);
-        self
-    }
-    pub fn images_path(&mut self, path: &Path) -> &mut Self {
-        self.imgs_path = Some(path.to_path_buf());
-        self
-    }
-    pub async fn finish(self) -> Result<App, Error> {
-        let path = match self.imgs_path {
-            Some(p) => p,
-            None => {
-                let home_dir = env::home_dir().ok_or(Error::HomeDirNotFound)?;
-                home_dir.join(".local/share/p-hash/images")
-            }
-        };
-        let images_processor = match self.images_processor {
-            Some(p) => p,
-            None => Box::new(RayonImagesProcessor::default()),
-        };
-        let pool = SqlitePool::connect_with(
-            SqliteConnectOptions::from_str("sqlite:data.db")?
-                .create_if_missing(true)
-                .pragma("cache_size", "200000"),
-        )
-        .await?;
-        let results_parser = match self.results_parser {
-            Some(p) => p,
-            None => Box::new(SqliteResultParser::new(pool.clone())),
-        };
-        let match_process = Box::new(SqliteRunner::new(pool.clone()));
-        Ok(App::new(
-            &path,
-            results_parser,
-            images_processor,
-            match_process,
-        ))
-    }
-}
 
 pub struct App {
     imgs_path: PathBuf,
@@ -93,8 +40,31 @@ impl App {
             match_process,
         }
     }
+    pub fn builder() -> AppBuilder<Missing, Missing, Missing> {
+        AppBuilder::new()
+    }
+    /// Runs with rayon for processing images and uses sqlite db to store results
     pub async fn try_default() -> Result<Self, Error> {
-        AppConfig::default().finish().await
+        let processor = Box::new(RayonImagesProcessor::default());
+
+        let pool = SqlitePool::connect_with(
+            SqliteConnectOptions::from_str("sqlite:data.db")?
+                .create_if_missing(true)
+                .pragma("cache_size", "200000"),
+        )
+        .await?;
+        let parser = Box::new(SqliteResultParser::new(pool.clone()));
+        let match_process = Box::new(SqliteRunner::new(pool.clone()));
+        let mut home = home_dir().unwrap();
+        home.push(".local/share/p-hash/images");
+        let app = AppBuilder::new()
+            .images_path(&home)
+            .images_processor(processor)
+            .results_parser(parser)
+            .match_process(match_process)
+            .finish();
+
+        Ok(app)
     }
     pub async fn run(&self) -> Result<(), Error> {
         let images = Images::from_path(self.imgs_path.to_path_buf());
