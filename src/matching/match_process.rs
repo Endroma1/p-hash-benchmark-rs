@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sqlx::SqlitePool;
 
 use crate::{
-    core::app::get_hashing_methods,
+    image_hash::HashingMethods,
     matching::{
         error::Error,
         fetcher::{ResultsFetcher, SqliteFetcher},
@@ -28,18 +28,19 @@ impl<E, M, R> MatchPipeline<E, M, R> {
             parser,
         }
     }
-    pub async fn execute(&self) -> Result<(), E> {
-        for id in get_hashing_methods().get_keys() {
-            let fetch_res = self.fetcher.fetch(id).await?;
+    pub async fn execute(&self, hashing_methods: &HashingMethods) -> Result<(), E> {
+        for (id, _) in hashing_methods.iter().enumerate() {
+            let fetch_res = self.fetcher.fetch(id as u16).await?;
             let processor_res = self.processor.process(fetch_res)?;
             self.parser.parse(processor_res).await?;
         }
         Ok(())
     }
 }
+/// Pipelinerunner should run for every hashing method. Matching across methods would be useless
 #[async_trait]
 pub trait PipelineRunner {
-    async fn run(&self) -> Result<(), Error>;
+    async fn run(&self, hashing_methods: &HashingMethods) -> Result<(), Error>;
 }
 
 pub struct SqliteRunner {
@@ -51,8 +52,9 @@ impl SqliteRunner {
     }
 }
 impl PipelineRunner for SqliteRunner {
-    fn run<'life0, 'async_trait>(
+    fn run<'life0, 'life1, 'async_trait>(
         &'life0 self,
+        hashing_methods: &'life1 HashingMethods,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<(), Error>>
@@ -62,6 +64,7 @@ impl PipelineRunner for SqliteRunner {
     >
     where
         'life0: 'async_trait,
+        'life1: 'async_trait,
         Self: 'async_trait,
     {
         Box::pin(async move {
@@ -71,7 +74,7 @@ impl PipelineRunner for SqliteRunner {
 
             let pipeline = MatchPipeline::new(fetcher, processor, parser);
 
-            pipeline.execute().await?;
+            pipeline.execute(hashing_methods).await?;
             Ok(())
         })
     }

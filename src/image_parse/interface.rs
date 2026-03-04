@@ -79,17 +79,6 @@ impl Iterator for Images {
     }
 }
 
-#[derive(PartialEq, Eq)]
-pub enum Status {
-    Running,
-    Stopped,
-}
-pub enum ImageReadMessage {
-    Image { image: Image },
-    Error { err: Error },
-    Quit,
-}
-
 #[derive(Debug, Clone)]
 pub enum Error {
     ParentNotFound { path: PathBuf },

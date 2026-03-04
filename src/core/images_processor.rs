@@ -14,18 +14,30 @@ use crate::{
         image_parser::{AppProcParser, ImageParser},
         state::{AppProcessResult, Hashes, Images, ModifiedImages},
     },
-    img_proc::Image,
+    image_hash::HashingMethods,
+    image_modify::Modifications,
+    image_parse::Image,
 };
 
 /// Parses input images given by img_proc::Image data struct.
 pub trait ImagesProcessor {
-    fn run(&self, images: Vec<Image>) -> AppProcessResult;
+    fn run(
+        &self,
+        images: Vec<Image>,
+        modifications: &Modifications,
+        hashing_methods: &HashingMethods,
+    ) -> AppProcessResult;
 }
 pub struct RayonImagesProcessor {
     image_parser: Box<dyn ImageParser>,
 }
 impl ImagesProcessor for RayonImagesProcessor {
-    fn run(&self, images: Vec<Image>) -> AppProcessResult {
+    fn run(
+        &self,
+        images: Vec<Image>,
+        modifications: &Modifications,
+        hashing_methods: &HashingMethods,
+    ) -> AppProcessResult {
         let (s, r) = unbounded();
         let style = ProgressStyle::with_template(
             "[{elapsed_precise} | {eta_precise}] Processing images: {pos:>7}/{len:7} {percent}%",
@@ -38,7 +50,9 @@ impl ImagesProcessor for RayonImagesProcessor {
             .progress_with(ProgressBar::new(images.len() as u64).with_style(style))
             .enumerate()
             .map(move |(id, image)| {
-                let res = self.image_parser.run(image, id as u32);
+                let res = self
+                    .image_parser
+                    .run(image, id as u32, &modifications, &hashing_methods);
                 s.send((id, res))
             })
             .for_each(|r| {

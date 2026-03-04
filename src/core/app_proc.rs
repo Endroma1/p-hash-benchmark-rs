@@ -6,8 +6,8 @@ use crate::{
         images_processor::PHashResult,
         state::{self, Hash, ModifiedImage, ModifiedImages},
     },
-    img_hash::{HashingMethods, hash_images},
-    img_mod::{Modifications, modify_image},
+    image_hash::{HashingMethods, hash_images},
+    image_modify::{Modifications, modify_image},
 };
 
 #[derive(Default)]
@@ -21,64 +21,54 @@ impl AppProcess {
     pub fn finish(self) -> PHashResult {
         self.result
     }
-    pub fn run(&mut self, img_path: &Path, img_id: u32) -> Result<(), Error> {
-        let modified_images = Self::modify_image(img_path, img_id)?;
+    pub fn run(
+        &mut self,
+        img_path: &Path,
+        img_id: u32,
+        modifications: &Modifications,
+        hashing_methods: &HashingMethods,
+    ) -> Result<(), Error> {
+        let modified_images = Self::modify_image(img_path, img_id, modifications)?;
         self.result.set_mod_imgs(modified_images);
 
         let ids = 0..self.result.mod_imgs().len();
 
         for id in ids {
-            if let Err(e) = self.hash_image(id as u32) {
+            if let Err(e) = self.hash_image(id as u32, &hashing_methods) {
                 tracing::error!("failed to hash an image {e}")
             }
         }
         Ok(())
     }
-    fn modify_image(img_path: &Path, img_id: u32) -> Result<ModifiedImages, Error> {
-        let modifications = Modifications::new();
-        let mod_ids = modifications.get_keys();
-        let modified_images = match modify_image(img_path, mod_ids) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(e.into());
-            }
-        };
+    fn modify_image(
+        img_path: &Path,
+        img_id: u32,
+        modifications: &Modifications,
+    ) -> Result<ModifiedImages, Error> {
+        let modified_images = modify_image(img_path, modifications)?;
 
-        let modified_images = modified_images.filter_map(|r| {
-            if let Err(e) = r.as_ref() {
-                tracing::warn!("could not modify a image: {}", e);
-            }
-            r.ok()
-        });
         let mod_imgs_state = modified_images.map(|i| ModifiedImage::new(img_id, i));
 
         Ok(ModifiedImages::from(
             mod_imgs_state.collect::<Vec<state::ModifiedImage>>(),
         ))
     }
-    fn hash_image(&mut self, mod_img_id: u32) -> Result<(), Error> {
-        let hashing_methods = HashingMethods::new();
-
-        let hashing_method_ids = hashing_methods.get_keys();
-
+    fn hash_image(
+        &mut self,
+        mod_img_id: u32,
+        hashing_methods: &HashingMethods,
+    ) -> Result<(), Error> {
         let img = {
             let modified_image = self.result.mod_imgs().get_img(mod_img_id)?;
 
             modified_image.get_img().ok_or(Error::ImageHandleClosed)?
         };
 
-        hash_images(img.clone(), hashing_method_ids)
-            .filter_map(|r| {
-                if let Err(e) = r.as_ref() {
-                    tracing::warn!("could not hash an image: {}", e);
-                }
-                r.ok()
-            })
-            .for_each(|h| {
-                self.result
-                    .hashes_mut()
-                    .insert_hash(Hash::new(mod_img_id, h));
-            });
+        hash_images(img.clone(), hashing_methods).for_each(|r| {
+            self.result
+                .hashes_mut()
+                .insert_hash(Hash::new(mod_img_id, r));
+        });
 
         self.result
             .mod_imgs_mut()

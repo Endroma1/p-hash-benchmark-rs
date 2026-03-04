@@ -1,6 +1,6 @@
 pub mod core;
 pub mod db;
-pub mod img_hash;
-pub mod img_mod;
-pub mod img_proc;
+pub mod image_hash;
+pub mod image_modify;
+pub mod image_parse;
 pub mod matching;

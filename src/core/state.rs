@@ -7,7 +7,7 @@ use crate::{
         error::Error,
         images_processor::{PHashResult, PHashResults},
     },
-    img_hash, img_mod, img_proc,
+    image_hash, image_modify, image_parse,
 };
 
 #[derive(Debug)]
@@ -43,16 +43,16 @@ impl FromIterator<Hash> for Hashes {
 #[derive(Debug)]
 pub struct Hash {
     mod_img_id: u32,
-    hash: img_hash::HashResult,
+    hash: image_hash::HashResult,
 }
 impl Hash {
-    pub fn new(mod_img_id: u32, hash: img_hash::HashResult) -> Self {
+    pub fn new(mod_img_id: u32, hash: image_hash::HashResult) -> Self {
         Self { mod_img_id, hash }
     }
     pub fn mod_img_id(&self) -> u32 {
         self.mod_img_id
     }
-    pub fn hash(&self) -> &img_hash::HashResult {
+    pub fn hash(&self) -> &image_hash::HashResult {
         &self.hash
     }
 }
@@ -75,7 +75,7 @@ impl AppProcessResult {
     pub fn images(&self) -> &Images {
         &self.imgs
     }
-    pub fn get_results(&self) -> Vec<(u32, &img_proc::Image, &PHashResult)> {
+    pub fn get_results(&self) -> Vec<(u32, &image_parse::Image, &PHashResult)> {
         let mut results = Vec::new();
         for (id, img) in self.imgs.iter().enumerate() {
             let res = self
@@ -108,31 +108,31 @@ impl AppProcessResult {
 }
 #[derive(Debug, Default)]
 pub struct Images {
-    imgs: Vec<img_proc::Image>,
+    imgs: Vec<image_parse::Image>,
 }
 impl Deref for Images {
-    type Target = Vec<img_proc::Image>;
+    type Target = Vec<image_parse::Image>;
     fn deref(&self) -> &Self::Target {
         &self.imgs
     }
 }
-impl From<Vec<img_proc::Image>> for Images {
-    fn from(value: Vec<img_proc::Image>) -> Self {
+impl From<Vec<image_parse::Image>> for Images {
+    fn from(value: Vec<image_parse::Image>) -> Self {
         Self { imgs: value }
     }
 }
 #[derive(Debug)]
 pub struct ModifiedImage {
     img_id: u32,
-    mod_img: img_mod::ModifiedImage,
+    mod_img: image_modify::ModifiedImage,
 }
 impl ModifiedImage {
-    pub fn new(img_id: u32, mod_img: img_mod::ModifiedImage) -> Self {
+    pub fn new(img_id: u32, mod_img: image_modify::ModifiedImage) -> Self {
         Self { img_id, mod_img }
     }
 }
 impl Deref for ModifiedImage {
-    type Target = img_mod::ModifiedImage;
+    type Target = image_modify::ModifiedImage;
     fn deref(&self) -> &Self::Target {
         &self.mod_img
     }

@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 async-trait = "0.1.89"
+bitvec = "1.0.1"
+bytevec = "0.2.0"
 crossbeam = "0.8.4"
+hex = "0.4.3"
 image = "0.23.14"
 img_hash = "3.2.0"
 indicatif = {version = "0.18.3", features=["rayon"]}

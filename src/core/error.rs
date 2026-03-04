@@ -1,11 +1,11 @@
 use std::fmt::Display;
 
-use crate::{img_mod, img_proc, matching};
+use crate::{image_modify, matching};
 
 #[derive(Debug)]
 pub enum Error {
-    ImageProc { err: crate::img_proc::Error },
-    ImageMod { err: crate::img_mod::Error },
+    ImageProc { err: crate::image_parse::Error },
+    ImageMod { err: crate::image_modify::Error },
     ModificationNotFound { id: usize },
     HashingMethodNotFound { id: usize },
     ImageNotFound { id: usize },
@@ -19,13 +19,13 @@ impl From<matching::error::Error> for Error {
         Self::MatchError { err: value }
     }
 }
-impl From<img_mod::Error> for Error {
-    fn from(value: crate::img_mod::Error) -> Self {
+impl From<image_modify::Error> for Error {
+    fn from(value: crate::image_modify::Error) -> Self {
         Self::ImageMod { err: value }
     }
 }
-impl From<img_proc::Error> for Error {
-    fn from(value: crate::img_proc::Error) -> Self {
+impl From<crate::image_parse::Error> for Error {
+    fn from(value: crate::image_parse::Error) -> Self {
         Self::ImageProc { err: value }
     }
 }

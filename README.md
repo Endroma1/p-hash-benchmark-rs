@@ -1,3 +1,6 @@
-# (WIP) Benchmarking for perceptual hashes in facial recognition
+# Benchmarking for perceptual hashes in facial recognition
+Modifies, hashes and matches images.
 
-Rust version of https://github.com/Endroma1/p-hash-benchmark
+## Usage
+See `/examples`
+
