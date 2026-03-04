@@ -27,6 +27,10 @@ impl MatchProcessor for UniquePairMatcher {
     type Input = Hashes;
     type Output = Matches;
     fn process(&self, inputs: Self::Input) -> Result<Self::Output, Self::Error> {
+        if inputs.len() <= 1 {
+            return Err(Error::NotEnougHashes(inputs.len()));
+        }
+
         let style = ProgressStyle::with_template(
             "[{elapsed_precise} | {eta_precise}] Matching hashes: {pos:>7}/{len:7} {percent}%",
         )
@@ -51,6 +55,9 @@ impl MatchProcessor for ThreadedUniquePairMatcher {
     type Input = Hashes;
     type Output = Receiver<Match>;
     fn process(&self, inputs: Self::Input) -> Result<Self::Output, Self::Error> {
+        if inputs.len() <= 1 {
+            return Err(Error::NotEnougHashes(inputs.len()));
+        }
         let (tx, rx) = sync_channel(10_000);
         let style = ProgressStyle::with_template(
             "[{elapsed_precise} | {eta_precise}] Matching hashes: {pos:>7}/{len:7} {percent}%",

@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum Error {
     Sqlx { err: sqlx::Error },
     HashesNotEqualLength { l1: u32, l2: u32 },
+    NotEnougHashes(usize),
 }
 impl From<sqlx::Error> for Error {
     fn from(value: sqlx::Error) -> Self {
@@ -18,6 +19,11 @@ impl Display for Error {
                 f,
                 "Input hashes does not have equal length: {} != {} ",
                 l1, l2
+            ),
+            Self::NotEnougHashes(len) => write!(
+                f,
+                "Not enough hashes found to begin matching. Expected len >= 2, found {} ",
+                len
             ),
         }
     }
