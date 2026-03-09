@@ -49,14 +49,12 @@ impl ImagesProcessor for RayonImagesProcessor {
             .par_iter()
             .progress_with(ProgressBar::new(images.len() as u64).with_style(style))
             .enumerate()
-            .map(move |(id, image)| {
+            .for_each(move |(id, image)| {
                 let res = self
                     .image_parser
-                    .run(image, id as u32, &modifications, &hashing_methods);
-                s.send((id, res))
-            })
-            .for_each(|r| {
-                if let Err(e) = r {
+                    .run(image, id as u32, modifications, hashing_methods);
+
+                if let Err(e) = s.send((id, res)) {
                     tracing::warn!("failed to send result through channel, err: {}", e);
                 }
             });
