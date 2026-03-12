@@ -1,5 +1,5 @@
 use crate::{
-    core::{app_proc::AppProcess, images_processor::PHashResult},
+    core::{Error, app_proc::AppProcess, images_processor::PHashResult},
     image_hash::HashingMethods,
     image_modify::Modifications,
     image_parse::Image,
@@ -13,7 +13,7 @@ pub trait ImageParser: Sync + Send {
         id: u32,
         modifications: &Modifications,
         hashing_methods: &HashingMethods,
-    ) -> PHashResult;
+    ) -> Result<PHashResult, Error>;
 }
 #[derive(Debug, Default)]
 pub struct AppProcParser {}
@@ -24,13 +24,11 @@ impl ImageParser for AppProcParser {
         id: u32,
         modifications: &Modifications,
         hashing_methods: &HashingMethods,
-    ) -> PHashResult {
+    ) -> Result<PHashResult, Error> {
         let mut app_proc = AppProcess::new();
-        let res = app_proc.run(image.get_path(), id, modifications, hashing_methods);
-        if let Err(e) = res {
-            tracing::error!("app proc failed with error {}", e);
-        }
+        app_proc.run(image.get_path(), id, modifications, hashing_methods)?;
+
         let proc_res = app_proc.finish();
-        proc_res
+        Ok(proc_res)
     }
 }

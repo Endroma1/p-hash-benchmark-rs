@@ -39,7 +39,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ImageProc { err } => write!(f, "Image proc error: {}", err),
-            Self::ImageMod { err } => write!(f, "Image modification errer: {}", err),
+            Self::ImageMod { err } => write!(f, "Image modification error: {}", err),
             Self::ModificationNotFound { id } => write!(f, "Modification with id {} not found", id),
             Self::HashingMethodNotFound { id } => {
                 write!(f, "Hashing method with id {} not found", id)

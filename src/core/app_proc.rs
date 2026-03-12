@@ -4,10 +4,10 @@ use crate::{
     core::{
         error::Error,
         images_processor::PHashResult,
-        state::{self, Hash, ModifiedImage, ModifiedImages},
+        state::{self, Hash, ModifiedImage},
     },
     image_hash::{HashingMethods, hash_images},
-    image_modify::{Modifications, modify_image},
+    image_modify::{Modifications, ModifiedImages, modify_image},
 };
 
 #[derive(Default)]

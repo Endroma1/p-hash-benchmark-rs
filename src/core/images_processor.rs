@@ -12,10 +12,10 @@ use crate::{
     core::{
         error::Error,
         image_parser::{AppProcParser, ImageParser},
-        state::{AppProcessResult, Hashes, Images, ModifiedImages},
+        state::{AppProcessResult, Hashes, Images},
     },
     image_hash::HashingMethods,
-    image_modify::Modifications,
+    image_modify::{Modifications, ModifiedImages},
     image_parse::Image,
 };
 
@@ -54,7 +54,19 @@ impl ImagesProcessor for RayonImagesProcessor {
                     .image_parser
                     .run(image, id as u32, modifications, hashing_methods);
 
-                if let Err(e) = s.send((id, res)) {
+                let phash_res = match res {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not parse image {:?}. Error: {}",
+                            image.get_path(),
+                            e
+                        );
+                        return;
+                    }
+                };
+
+                if let Err(e) = s.send((id, phash_res)) {
                     tracing::warn!("failed to send result through channel, err: {}", e);
                 }
             });
@@ -101,21 +113,25 @@ impl PHashResults {
                     id,
                     img.get_mod_id()
                 );
-                let sqlx_res = sqlx::query(
+
+                let res: (i64,) = sqlx::query_as(
                     "
-                INSERT INTO modified_images ( image_id, modification_id) VALUES (?,?);
+                INSERT INTO modified_images ( image_id, modification_id) VALUES (?,?) 
+                ON CONFLICT (image_id, modification_id) 
+                DO UPDATE SET modification_id = excluded.modification_id
+                RETURNING id;
                 ",
                 )
                 .bind(id)
                 .bind(img.get_mod_id())
-                .execute(&mut *tx)
+                .fetch_one(&mut *tx)
                 .await?;
 
-                let mod_img_id = sqlx_res.last_insert_rowid();
+                let mod_img_id = res.0;
 
                 sqlx::query(
                     "
-                INSERT INTO hashes (hash, mod_image_id, hashing_method_id) VALUES (?,?,?);
+                INSERT INTO hashes (hash, mod_image_id, hashing_method_id) VALUES (?,?,?) ON CONFLICT DO NOTHING;
                 ",
                 )
                 .bind(hash.hash().hash().to_string())

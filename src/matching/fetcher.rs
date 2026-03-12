@@ -42,7 +42,13 @@ impl ResultsFetcher for SqliteFetcher {
         Box::pin(async move {
             let res: Result<Vec<Hash>, sqlx::Error> = sqlx::query_as(
                 "
-                SELECT id, hash FROM hashes WHERE hashing_method_id = ?;
+                SELECT h.id, h.hash
+                FROM hashes h
+                JOIN modified_images mi ON mi.id = h.mod_image_id
+                JOIN images i ON i.id = mi.image_id
+                JOIN run_images ri ON ri.image_id = i.id
+                JOIN program p ON p.run_id = ri.run_id
+                WHERE h.hashing_method_id = ?;
                 ",
             )
             .bind(method_id)

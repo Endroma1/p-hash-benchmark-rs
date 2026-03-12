@@ -1,10 +1,12 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{env::args, path::PathBuf, str::FromStr};
 
 use p_hash::{
     core::{app::App, images_processor::RayonImagesProcessor, result_parser::SqliteResultParser},
+    hashing_methods,
     image_hash::{self, HashingMethods},
     image_modify::{self, Modifications},
     matching::match_process::SqliteRunner,
+    modified_images,
 };
 use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -15,6 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::debug!("starting phash");
 
+    // Choosing what method to process images with.
     let processor = Box::new(RayonImagesProcessor::default());
 
     let pool = SqlitePool::connect_with(
@@ -26,15 +29,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let parser = Box::new(SqliteResultParser::new(pool.clone()));
     let match_process = Box::new(SqliteRunner::new(pool.clone()));
-    let example_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("images");
+
+    let args: Vec<String> = args().collect();
+    let example_dir = match args.get(1) {
+        Some(s) => PathBuf::from(s),
+        None => PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("images"),
+    };
 
     tracing::info!("Using path {:?}", example_dir);
 
-    let mut modifications = Modifications::new();
-    modifications.push(image_modify::Angle::Rot180);
+    // What modifications that should be used.
+    let modifications = modified_images![
+        image_modify::Angle::Rot180,
+        image_modify::Angle::Rot90,
+        image_modify::Angle::Rot270,
+        image_modify::Blur::default()
+    ];
 
-    let mut hashing_methods = HashingMethods::new();
-    hashing_methods.push(image_hash::AverageHash::new());
+    // What hashing methods that should be used.
+    let hashing_methods = hashing_methods![
+        image_hash::AverageHash::new(),
+        image_hash::VertGradient::new()
+    ];
 
     let app = App::builder()
         .images_path(&example_dir)

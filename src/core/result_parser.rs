@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::Utc;
 use sqlx::SqlitePool;
 
 use crate::{
@@ -49,17 +50,31 @@ impl ResultParser for SqliteResultParser {
             DB::create_db().await?;
             send_hashes_to_db(&self.pool, hashing_methods).await?;
             send_modifications_to_db(&self.pool, &modifications).await?;
+
+            let run_id = create_run(&self.pool).await?;
+            create_program(&self.pool, run_id).await?;
+
             let mut tx = self.pool.begin().await?;
             for (id, img) in results.images().iter().enumerate() {
                 let path_str = img.get_path().to_string_lossy().to_string();
                 sqlx::query(
                     "
-            INSERT INTO images (id, path, user) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING;
-            ",
+                INSERT INTO images (id, path, user) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING;
+                    ",
                 )
                 .bind(id as u32)
                 .bind(path_str)
                 .bind(img.get_user())
+                .execute(&mut *tx)
+                .await?;
+
+                sqlx::query(
+                    "
+                    INSERT INTO run_images (run_id, image_id) VALUES (?, ?);
+                    ",
+                )
+                .bind(run_id)
+                .bind(id as u32)
                 .execute(&mut *tx)
                 .await?;
             }
@@ -68,6 +83,30 @@ impl ResultParser for SqliteResultParser {
             Ok(())
         })
     }
+}
+async fn create_program(pool: &SqlitePool, run_id: i64) -> Result<(), Error> {
+    sqlx::query(
+        "
+        INSERT OR REPLACE INTO program (id, run_id) VALUES (0, ?);
+        ",
+    )
+    .bind(run_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn create_run(pool: &SqlitePool) -> Result<i64, Error> {
+    let now = Utc::now();
+    let res = sqlx::query(
+        "
+        INSERT INTO runs (timestamp) VALUES (?);
+        ",
+    )
+    .bind(now.timestamp_millis())
+    .execute(pool)
+    .await?;
+    Ok(res.last_insert_rowid())
 }
 
 async fn send_modifications_to_db(

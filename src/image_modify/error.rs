@@ -4,7 +4,7 @@ use std::fmt::Display;
 pub enum Error {
     Image { err: image::ImageError },
     IO { err: std::io::Error },
-    ModificationNotFound { id: u16 },
+    ModificationNotFound { id: usize },
 }
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
