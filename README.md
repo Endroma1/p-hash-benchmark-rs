@@ -11,3 +11,7 @@ cargo run --example sqlite-rayon
 cargo build --release --example sqlite-rayon  
 ```
 
+It outputs to a SQLite db `data.db`.
+
+
+![DB Structure](./p-hash-db.svg)
