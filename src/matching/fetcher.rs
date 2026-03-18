@@ -1,9 +1,10 @@
 use async_trait::async_trait;
+use crossbeam::channel::Sender;
 use sqlx::SqlitePool;
 
 use crate::matching::{
     error::Error,
-    state::{Hash, Hashes},
+    state::{Hash, Hashes, Message},
 };
 
 // Fetches hashes from source based on their hashing method used.
@@ -11,7 +12,11 @@ use crate::matching::{
 pub trait ResultsFetcher: Send + Sync {
     type Error;
     type Output;
-    async fn fetch(&self, method_id: u16) -> Result<Self::Output, Self::Error>;
+    async fn fetch(
+        &self,
+        method_id: u16,
+        state: Sender<Message>,
+    ) -> Result<Self::Output, Self::Error>;
 }
 
 pub struct SqliteFetcher {
@@ -28,6 +33,7 @@ impl ResultsFetcher for SqliteFetcher {
     fn fetch<'life0, 'async_trait>(
         &'life0 self,
         method_id: u16,
+        _: Sender<Message>,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<Self::Output, Self::Error>>

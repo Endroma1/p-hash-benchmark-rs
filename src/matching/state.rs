@@ -1,7 +1,34 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    fmt::Display,
+    ops::{Deref, DerefMut},
+};
 
+use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
+
+pub enum Message {
+    // Update the progress of a component
+    Update { component: Component, delta: u32 },
+    // Set the total expected progress.
+    Set { component: Component, total: u32 },
+}
+
+#[derive(Debug, Sequence, PartialEq, Eq, Hash, Copy, Clone)]
+pub enum Component {
+    Fetcher,
+    Processor,
+    Parser,
+}
+impl Display for Component {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fetcher => write!(f, "Fetcher"),
+            Self::Processor => write!(f, "Processor"),
+            Self::Parser => write!(f, "Parser"),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Hash {

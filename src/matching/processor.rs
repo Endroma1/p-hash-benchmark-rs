@@ -3,11 +3,11 @@ use std::{
     thread,
 };
 
-use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
+use crossbeam::channel::Sender;
 
 use crate::matching::{
     error::Error,
-    state::{HammingDistance, Hashes, Match, Matches},
+    state::{Component, HammingDistance, Hashes, Match, Matches, Message},
 };
 
 // Matches hashes and outputs the result
@@ -15,7 +15,11 @@ pub trait MatchProcessor: Send + Sync {
     type Input;
     type Output;
     type Error;
-    fn process(&self, inputs: Self::Input) -> Result<Self::Output, Self::Error>;
+    fn process(
+        &self,
+        inputs: Self::Input,
+        state_handle: Sender<Message>,
+    ) -> Result<Self::Output, Self::Error>;
 }
 
 /// Matches only unique pairs, (A,A) and (A,B) (B,A) are not allowed. All results are gathered and
@@ -26,18 +30,27 @@ impl MatchProcessor for UniquePairMatcher {
     type Error = Error;
     type Input = Hashes;
     type Output = Matches;
-    fn process(&self, inputs: Self::Input) -> Result<Self::Output, Self::Error> {
+    fn process(
+        &self,
+        inputs: Self::Input,
+        state_handle: Sender<Message>,
+    ) -> Result<Self::Output, Self::Error> {
+        state_handle.send(Message::Set {
+            component: Component::Processor,
+            total: inputs.len() as u32,
+        });
+
         if inputs.len() <= 1 {
             return Err(Error::NotEnougHashes(inputs.len()));
         }
 
-        let style = ProgressStyle::with_template(
-            "[{elapsed_precise} | {eta_precise}] Matching hashes: {pos:>7}/{len:7} {percent}%",
-        )
-        .unwrap()
-        .progress_chars("##-");
         let mut matches: Matches = Matches::default();
-        for (i, input1) in inputs.iter().enumerate().progress_with_style(style) {
+        for (i, input1) in inputs.iter().enumerate() {
+            state_handle.send(Message::Update {
+                component: Component::Processor,
+                delta: 1,
+            });
+
             for input2 in inputs[i + 1..].iter() {
                 let hamming_distance = compute_hamming_distance(input1.hash(), input2.hash())?;
                 let res = Match::new(input1.id(), input2.id(), hamming_distance);
@@ -54,29 +67,33 @@ impl MatchProcessor for ThreadedUniquePairMatcher {
     type Error = Error;
     type Input = Hashes;
     type Output = Receiver<Match>;
-    fn process(&self, inputs: Self::Input) -> Result<Self::Output, Self::Error> {
+    fn process(
+        &self,
+        inputs: Self::Input,
+        state_handle: Sender<Message>,
+    ) -> Result<Self::Output, Self::Error> {
         if inputs.len() <= 1 {
             return Err(Error::NotEnougHashes(inputs.len()));
         }
         let (tx, rx) = sync_channel(10_000);
-        let style = ProgressStyle::with_template(
-            "[{elapsed_precise} | {eta_precise}] Matching hashes: {pos:>7}/{len:7} {percent}%",
-        )
-        .unwrap()
-        .progress_chars("##-");
-        let n = inputs.len();
-        let pb = ProgressBar::new((n * (n - 1) / 2) as u64);
-        pb.set_message("starting matching");
-        pb.set_style(style);
+
+        state_handle.send(Message::Set {
+            component: Component::Processor,
+            total: inputs.len() as u32,
+        });
+
         thread::spawn(move || {
             let mut should_quit = false;
             for (i, input1) in inputs.iter().enumerate() {
+                state_handle.send(Message::Update {
+                    component: Component::Processor,
+                    delta: 1,
+                });
+
                 if should_quit {
                     break;
                 }
-                pb.set_message("matching...");
                 for input2 in inputs[i + 1..].iter() {
-                    pb.inc(1);
                     let res = compute_hamming_distance(input1.hash(), input2.hash());
                     let hamming_distance = match res {
                         Ok(r) => r,
@@ -94,7 +111,6 @@ impl MatchProcessor for ThreadedUniquePairMatcher {
                     };
                 }
             }
-            pb.finish();
         });
         Ok(rx)
     }

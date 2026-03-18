@@ -1,20 +1,24 @@
+use crossbeam::channel::Sender;
 use std::sync::mpsc::Receiver;
 
 use async_trait::async_trait;
-use indicatif::{ProgressBar, ProgressStyle};
 use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use tokio::task::{self};
 
 use crate::matching::{
     error::Error,
-    state::{Match, Matches},
+    state::{Component, Match, Matches, Message},
 };
 
 #[async_trait]
 pub trait MatchResultParser: Sync + Send {
     type Result;
     type Error;
-    async fn parse(&self, results: Self::Result) -> Result<(), Self::Error>;
+    async fn parse(
+        &self,
+        results: Self::Result,
+        state_handle: Sender<Message>,
+    ) -> Result<(), Self::Error>;
 }
 
 // Takes a Receiver<Hash> and sends each entry to DB. Use SqliteResultParser to pars Matches
@@ -33,6 +37,7 @@ impl MatchResultParser for RcSqliteResultParser {
     fn parse<'life0, 'async_trait>(
         &'life0 self,
         results: Self::Result,
+        _: Sender<Message>,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<(), Self::Error>>
@@ -96,6 +101,7 @@ impl MatchResultParser for SqliteResultParser {
     fn parse<'life0, 'async_trait>(
         &'life0 self,
         mut results: Self::Result,
+        s: Sender<Message>,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<(), Self::Error>>
@@ -108,16 +114,14 @@ impl MatchResultParser for SqliteResultParser {
         Self: 'async_trait,
     {
         Box::pin(async move {
-            let style =
-                ProgressStyle::with_template("[{elapsed_precise} | {eta_precise}] Sending matches to DB: {pos:>7}/{len:7} {percent}%")
-                    .unwrap()
-                    .progress_chars("##-");
-
-            let pb = ProgressBar::new(results.len() as u64).with_style(style);
             while !results.is_empty() {
                 let chunk: Vec<Match> = results.drain(..10_000).collect();
+                s.send(Message::Update {
+                    component: Component::Parser,
+                    delta: chunk.len() as u32,
+                });
+
                 let mut tx = self.pool.begin().await?;
-                let pb = pb.clone();
 
                 task::spawn(async move {
                     for result in chunk.iter() {
@@ -130,8 +134,6 @@ impl MatchResultParser for SqliteResultParser {
                     .bind( result.hash_id2())
                     .execute(&mut *tx)
                     .await.unwrap();
-
-                        pb.inc(1);
                     }
                     tx.commit().await.unwrap();
                 });

@@ -9,10 +9,12 @@ bitvec = "1.0.1"
 bytevec = "0.2.0"
 chrono = "0.4.44"
 crossbeam = "0.8.4"
+enum-iterator = "2.3.0"
 hex = "0.4.3"
 image = "0.23.14"
 img_hash = "3.2.0"
 indicatif = {version = "0.18.3", features=["rayon"]}
+oneshot = {version = "0.2.1", features=["std"]}
 rayon = "1.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite","macros"] }
