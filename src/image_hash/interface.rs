@@ -7,7 +7,7 @@ use crate::image_hash::{HashingMethods, collection::HashResult};
 
 pub trait HashingMethod: Send + Sync {
     fn hash(&self, img: &DynamicImage) -> Hash;
-    fn name(&self) -> &str;
+    fn name(&self) -> String;
 }
 pub fn hash_images(
     img: DynamicImage,

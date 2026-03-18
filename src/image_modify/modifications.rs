@@ -5,6 +5,11 @@ pub struct Blur {
     sigma: f32,
 }
 
+impl Blur {
+    pub fn new(sigma: f32) -> Self {
+        Self { sigma: sigma }
+    }
+}
 impl Default for Blur {
     fn default() -> Self {
         Self { sigma: 0.9 }
