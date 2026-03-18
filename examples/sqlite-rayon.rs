@@ -15,7 +15,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logger()?;
 
-    tracing::debug!("starting phash");
+    tracing::info!("Starting phash");
 
     // Choosing what method to process images with.
     let processor = Box::new(RayonImagesProcessor::default());
@@ -65,6 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::error!("{e}");
     };
 
+    tracing::info!("Finished phash");
     Ok(())
 }
 
