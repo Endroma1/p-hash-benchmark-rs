@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
+use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use sqlx::SqlitePool;
 
 use crate::{
@@ -54,8 +55,19 @@ impl ResultParser for SqliteResultParser {
             let run_id = create_run(&self.pool).await?;
             create_program(&self.pool, run_id).await?;
 
+            let style = ProgressStyle::with_template(
+                "[{elapsed_precise} | {eta_precise}] Sending results to DB: {pos:>7}/{len:7} {percent}%",
+            )
+            .unwrap()
+            .progress_chars("##-");
+
             let mut tx = self.pool.begin().await?;
-            for (id, img) in results.images().iter().enumerate() {
+            for (id, img) in results
+                .images()
+                .iter()
+                .enumerate()
+                .progress_with_style(style)
+            {
                 let path_str = img.get_path().to_string_lossy().to_string();
                 sqlx::query(
                     "
