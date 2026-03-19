@@ -3,6 +3,8 @@ use std::{
     thread,
 };
 
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
 use crate::matching::{
     error::Error,
     state::{Component, HammingDistance, Hashes, Match, MatchState, Matches},
@@ -97,6 +99,50 @@ impl MatchProcessor for ThreadedUniquePairMatcher {
                     };
                 }
             }
+        });
+        Ok(rx)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct MultiThreadedUniquePairMatcher {}
+impl MatchProcessor for MultiThreadedUniquePairMatcher {
+    type Error = Error;
+    type Input = Hashes;
+    type Output = Receiver<Match>;
+    fn process(
+        &self,
+        inputs: Self::Input,
+        state_handle: MatchState,
+    ) -> Result<Self::Output, Self::Error> {
+        if inputs.len() <= 1 {
+            return Err(Error::NotEnougHashes(inputs.len()));
+        }
+        let (tx, rx) = sync_channel(10_000);
+
+        state_handle.set(Component::Processor, inputs.len() as u32);
+
+        rayon::spawn(move || {
+            inputs.par_iter().enumerate().for_each(|(i, input1)| {
+                state_handle.update(Component::Processor, 1);
+
+                for input2 in inputs[i + 1..].iter() {
+                    let res = compute_hamming_distance(input1.hash(), input2.hash());
+                    let hamming_distance = match res {
+                        Ok(r) => r,
+                        Err(e) => {
+                            tracing::warn!("could not match entry: {}", e);
+                            break;
+                        }
+                    };
+
+                    let res = Match::new(input1.id(), input2.id(), hamming_distance);
+                    if let Err(e) = tx.send(res) {
+                        tracing::warn!("could not send result to channel, err: {}", e);
+                        break;
+                    };
+                }
+            });
         });
         Ok(rx)
     }

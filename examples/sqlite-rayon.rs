@@ -49,14 +49,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // What hashing methods that should be used.
     let hashing_methods = hashing_methods![
-        image_hash::AverageHash::new(8),
+        //image_hash::AverageHash::new(8),
         //image_hash::AverageHash::new(16),
         //image_hash::AverageHash::new(64),
         //image_hash::AverageHash::new(256),
-        image_hash::VertGradient::new(8),
+        //image_hash::VertGradient::new(8),
         //image_hash::VertGradient::new(16),
         //image_hash::VertGradient::new(64),
-        //image_hash::VertGradient::new(256)
+        image_hash::VertGradient::new(256)
     ];
 
     let app = App::builder()

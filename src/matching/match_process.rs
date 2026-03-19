@@ -9,7 +9,7 @@ use crate::{
     matching::{
         error::Error,
         fetcher::{ResultsFetcher, SqliteFetcher},
-        processor::{MatchProcessor, ThreadedUniquePairMatcher},
+        processor::{MatchProcessor, MultiThreadedUniquePairMatcher, ThreadedUniquePairMatcher},
         result_parser::{MatchResultParser, RcSqliteResultParser},
         state::{Component, MatchState, Message},
     },
@@ -112,7 +112,7 @@ impl PipelineRunner for SqliteRunner {
     {
         Box::pin(async move {
             let fetcher = Box::new(SqliteFetcher::new(self.pool.clone()));
-            let processor = Box::new(ThreadedUniquePairMatcher::default());
+            let processor = Box::new(MultiThreadedUniquePairMatcher::default());
             let parser = Box::new(RcSqliteResultParser::from_pool(self.pool.clone()));
 
             let pipeline = MatchPipeline::new(fetcher, processor, parser);
