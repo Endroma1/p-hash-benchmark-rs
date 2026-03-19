@@ -3,11 +3,9 @@ use std::{
     thread,
 };
 
-use crossbeam::channel::Sender;
-
 use crate::matching::{
     error::Error,
-    state::{Component, HammingDistance, Hashes, Match, Matches, Message},
+    state::{Component, HammingDistance, Hashes, Match, MatchState, Matches},
 };
 
 // Matches hashes and outputs the result
@@ -18,7 +16,7 @@ pub trait MatchProcessor: Send + Sync {
     fn process(
         &self,
         inputs: Self::Input,
-        state_handle: Sender<Message>,
+        state_handle: MatchState,
     ) -> Result<Self::Output, Self::Error>;
 }
 
@@ -33,12 +31,9 @@ impl MatchProcessor for UniquePairMatcher {
     fn process(
         &self,
         inputs: Self::Input,
-        state_handle: Sender<Message>,
+        state_handle: MatchState,
     ) -> Result<Self::Output, Self::Error> {
-        state_handle.send(Message::Set {
-            component: Component::Processor,
-            total: inputs.len() as u32,
-        });
+        state_handle.set(Component::Processor, inputs.len() as u32);
 
         if inputs.len() <= 1 {
             return Err(Error::NotEnougHashes(inputs.len()));
@@ -46,10 +41,7 @@ impl MatchProcessor for UniquePairMatcher {
 
         let mut matches: Matches = Matches::default();
         for (i, input1) in inputs.iter().enumerate() {
-            state_handle.send(Message::Update {
-                component: Component::Processor,
-                delta: 1,
-            });
+            state_handle.update(Component::Processor, 1);
 
             for input2 in inputs[i + 1..].iter() {
                 let hamming_distance = compute_hamming_distance(input1.hash(), input2.hash())?;
@@ -70,25 +62,19 @@ impl MatchProcessor for ThreadedUniquePairMatcher {
     fn process(
         &self,
         inputs: Self::Input,
-        state_handle: Sender<Message>,
+        state_handle: MatchState,
     ) -> Result<Self::Output, Self::Error> {
         if inputs.len() <= 1 {
             return Err(Error::NotEnougHashes(inputs.len()));
         }
         let (tx, rx) = sync_channel(10_000);
 
-        state_handle.send(Message::Set {
-            component: Component::Processor,
-            total: inputs.len() as u32,
-        });
+        state_handle.set(Component::Processor, inputs.len() as u32);
 
         thread::spawn(move || {
             let mut should_quit = false;
             for (i, input1) in inputs.iter().enumerate() {
-                state_handle.send(Message::Update {
-                    component: Component::Processor,
-                    delta: 1,
-                });
+                state_handle.update(Component::Processor, 1);
 
                 if should_quit {
                     break;

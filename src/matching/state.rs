@@ -3,9 +3,39 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use crossbeam::channel::{RecvError, bounded};
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
+
+/// Clone only increases reference count of channels(hopefully)
+#[derive(Clone)]
+pub struct MatchState {
+    producer: crossbeam::channel::Sender<Message>,
+    consumer: crossbeam::channel::Receiver<Message>,
+}
+impl MatchState {
+    pub fn new() -> Self {
+        let (state_handle, sub) = bounded(10000);
+        Self {
+            consumer: sub,
+            producer: state_handle,
+        }
+    }
+    pub fn update(&self, component: Component, delta: u32) {
+        self.producer
+            .send(Message::Update { component, delta })
+            .unwrap();
+    }
+    pub fn set(&self, component: Component, total: u32) {
+        self.producer
+            .send(Message::Set { component, total })
+            .unwrap();
+    }
+    pub fn get(&self) -> Result<Message, RecvError> {
+        self.consumer.recv()
+    }
+}
 
 pub enum Message {
     // Update the progress of a component

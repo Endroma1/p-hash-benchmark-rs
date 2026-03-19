@@ -6,6 +6,7 @@ use crate::{
         error::Error,
         images_processor::ImagesProcessor,
         result_parser::ResultParser,
+        state::AppState,
     },
     image_hash::HashingMethods,
     image_modify::Modifications,
@@ -20,8 +21,7 @@ pub struct App {
     results_parser: Box<dyn ResultParser>,
     match_process: Box<dyn PipelineRunner>,
 
-    modifications: Modifications,
-    hashing_methods: HashingMethods,
+    state: AppState,
 }
 impl App {
     pub fn new(
@@ -32,13 +32,13 @@ impl App {
         modifications: Modifications,
         hashing_methods: HashingMethods,
     ) -> Self {
+        let state = AppState::new(hashing_methods, modifications);
         Self {
             imgs_path: path.to_path_buf(),
             images_processor,
             results_parser,
             match_process,
-            modifications,
-            hashing_methods,
+            state,
         }
     }
     pub fn builder() -> AppBuilder<Missing, Missing, Missing, Missing, Missing> {
@@ -56,15 +56,23 @@ impl App {
             .collect();
 
         tracing::info!("starting image hashing");
-        let res = self
-            .images_processor
-            .run(images, &self.modifications, &self.hashing_methods);
+        let res = self.images_processor.run(
+            images,
+            &self.state.modifications(),
+            &self.state.hashing_methods(),
+        );
 
         tracing::info!("sending results to db");
         self.results_parser
-            .parse(res, &self.modifications, &self.hashing_methods)
+            .parse(
+                res,
+                &self.state.modifications(),
+                &self.state.hashing_methods(),
+            )
             .await?;
-        self.match_process.run(&self.hashing_methods).await?;
+        self.match_process
+            .run(&self.state.hashing_methods())
+            .await?;
 
         Ok(())
     }

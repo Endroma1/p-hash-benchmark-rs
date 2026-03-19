@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::{Arc, mpsc},
+};
 
 use sqlx::SqlitePool;
 
@@ -7,8 +10,70 @@ use crate::{
         error::Error,
         images_processor::{PHashResult, PHashResults},
     },
-    image_hash, image_modify, image_parse,
+    image_hash::{self, HashingMethods},
+    image_modify::{self, Modifications},
+    image_parse,
 };
+pub struct AppState {
+    handler: mpsc::Sender<Message>,
+}
+impl AppState {
+    pub fn new(hashes: HashingMethods, modifications: Modifications) -> Self {
+        let handler = AppStateBuilder::new(hashes, modifications).spawn_app_state();
+        Self { handler }
+    }
+    pub fn hashing_methods(&self) -> Arc<HashingMethods> {
+        let (tx, rx) = oneshot::channel();
+        self.handler.send(Message::HashingMethods(tx));
+        let res = rx.recv().unwrap();
+        res
+    }
+    pub fn modifications(&self) -> Arc<Modifications> {
+        let (tx, rx) = oneshot::channel();
+        self.handler.send(Message::Modifications(tx));
+        let res = rx.recv().unwrap();
+        res
+    }
+}
+
+pub struct AppStateBuilder {
+    hashes: Arc<HashingMethods>,
+    modifications: Arc<Modifications>,
+}
+impl AppStateBuilder {
+    pub fn new(hashes: HashingMethods, modifications: Modifications) -> Self {
+        Self {
+            hashes: Arc::new(hashes),
+            modifications: Arc::new(modifications),
+        }
+    }
+
+    /// Spawns app state and returns handler
+    pub fn spawn_app_state(self) -> mpsc::Sender<Message> {
+        let (tx, rx) = mpsc::channel();
+        rayon::spawn(move || {
+            while let Ok(m) = rx.recv() {
+                match m {
+                    Message::HashingMethods(r) => {
+                        if r.send(Arc::clone(&self.hashes)).is_err() {
+                            break;
+                        };
+                    }
+                    Message::Modifications(r) => {
+                        if r.send(Arc::clone(&self.modifications)).is_err() {
+                            break;
+                        };
+                    }
+                }
+            }
+        });
+        tx
+    }
+}
+pub enum Message {
+    HashingMethods(oneshot::Sender<Arc<HashingMethods>>),
+    Modifications(oneshot::Sender<Arc<Modifications>>),
+}
 
 #[derive(Debug)]
 pub struct Hashes {

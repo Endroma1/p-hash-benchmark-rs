@@ -1,4 +1,3 @@
-use crossbeam::channel::Sender;
 use std::sync::mpsc::Receiver;
 
 use async_trait::async_trait;
@@ -7,18 +6,14 @@ use tokio::task::{self};
 
 use crate::matching::{
     error::Error,
-    state::{Component, Match, Matches, Message},
+    state::{Component, Match, MatchState, Matches},
 };
 
 #[async_trait]
 pub trait MatchResultParser: Sync + Send {
     type Result;
     type Error;
-    async fn parse(
-        &self,
-        results: Self::Result,
-        state_handle: Sender<Message>,
-    ) -> Result<(), Self::Error>;
+    async fn parse(&self, results: Self::Result, state: MatchState) -> Result<(), Self::Error>;
 }
 
 // Takes a Receiver<Hash> and sends each entry to DB. Use SqliteResultParser to pars Matches
@@ -37,7 +32,7 @@ impl MatchResultParser for RcSqliteResultParser {
     fn parse<'life0, 'async_trait>(
         &'life0 self,
         results: Self::Result,
-        _: Sender<Message>,
+        _: MatchState,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<(), Self::Error>>
@@ -101,7 +96,7 @@ impl MatchResultParser for SqliteResultParser {
     fn parse<'life0, 'async_trait>(
         &'life0 self,
         mut results: Self::Result,
-        s: Sender<Message>,
+        s: MatchState,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<(), Self::Error>>
@@ -116,10 +111,7 @@ impl MatchResultParser for SqliteResultParser {
         Box::pin(async move {
             while !results.is_empty() {
                 let chunk: Vec<Match> = results.drain(..10_000).collect();
-                s.send(Message::Update {
-                    component: Component::Parser,
-                    delta: chunk.len() as u32,
-                });
+                s.update(Component::Parser, chunk.len() as u32);
 
                 let mut tx = self.pool.begin().await?;
 

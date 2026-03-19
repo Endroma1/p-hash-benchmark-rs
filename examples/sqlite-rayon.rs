@@ -42,21 +42,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let modifications = modified_images![
         image_modify::Angle::Rot180,
         image_modify::Angle::Rot90,
-        image_modify::Angle::Rot270,
-        image_modify::Blur::new(0.5),
-        image_modify::Blur::new(0.9),
+        //image_modify::Angle::Rot270,
+        //image_modify::Blur::new(0.5),
+        //image_modify::Blur::new(0.9),
     ];
 
     // What hashing methods that should be used.
     let hashing_methods = hashing_methods![
         image_hash::AverageHash::new(8),
-        image_hash::AverageHash::new(16),
-        image_hash::AverageHash::new(64),
-        image_hash::AverageHash::new(256),
+        //image_hash::AverageHash::new(16),
+        //image_hash::AverageHash::new(64),
+        //image_hash::AverageHash::new(256),
         image_hash::VertGradient::new(8),
-        image_hash::VertGradient::new(16),
-        image_hash::VertGradient::new(64),
-        image_hash::VertGradient::new(256)
+        //image_hash::VertGradient::new(16),
+        //image_hash::VertGradient::new(64),
+        //image_hash::VertGradient::new(256)
     ];
 
     let app = App::builder()

@@ -1,8 +1,6 @@
-use std::{collections::HashMap, sync::mpsc::Sender, thread};
+use std::{collections::HashMap, thread};
 
 use async_trait::async_trait;
-use crossbeam::channel::{Receiver, bounded};
-use enum_iterator::all;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use sqlx::SqlitePool;
 
@@ -13,7 +11,7 @@ use crate::{
         fetcher::{ResultsFetcher, SqliteFetcher},
         processor::{MatchProcessor, ThreadedUniquePairMatcher},
         result_parser::{MatchResultParser, RcSqliteResultParser},
-        state::{Component, Message},
+        state::{Component, MatchState, Message},
     },
 };
 
@@ -35,38 +33,25 @@ impl<E, M, R> MatchPipeline<E, M, R> {
         }
     }
     pub async fn execute(&self, hashing_methods: &HashingMethods) -> Result<(), E> {
-        let (state_handle, sub) = bounded(10000);
-        indicatif_view(sub.clone());
+        let state = MatchState::new();
 
-        // Unwrap for now, will discuss if pipeline should be stopped if match state is not
-        // running.
-        state_handle
-            .send(Message::Set {
-                component: Component::Fetcher,
-                total: hashing_methods.len() as u32,
-            })
-            .unwrap();
+        indicatif_view(state.clone());
+
+        state.set(Component::Fetcher, hashing_methods.len() as u32);
 
         for (id, _) in hashing_methods.iter().enumerate() {
-            state_handle
-                .send(Message::Update {
-                    component: Component::Fetcher,
-                    delta: 1,
-                })
-                .unwrap();
+            state.update(Component::Fetcher, 1);
 
-            let fetch_res = self.fetcher.fetch(id as u16, state_handle.clone()).await?;
-            let processor_res = self.processor.process(fetch_res, state_handle.clone())?;
-            self.parser
-                .parse(processor_res, state_handle.clone())
-                .await?;
+            let fetch_res = self.fetcher.fetch(id as u16, state.clone()).await?;
+            let processor_res = self.processor.process(fetch_res, state.clone())?;
+            self.parser.parse(processor_res, state.clone()).await?;
         }
         Ok(())
     }
 }
 
 /// Spawn a view thread that uses indicatif as frontend to MatchState
-fn indicatif_view(rx_state: Receiver<Message>) {
+fn indicatif_view(rx_state: MatchState) {
     let style = ProgressStyle::with_template(
         "[{elapsed_precise} | {eta_precise}] {msg}: {pos:>7}/{len:7} {percent}%",
     )
@@ -76,7 +61,7 @@ fn indicatif_view(rx_state: Receiver<Message>) {
     thread::spawn(move || {
         let multi = MultiProgress::new();
         let mut progressbars = HashMap::new();
-        while let Ok(m) = rx_state.recv() {
+        while let Ok(m) = rx_state.get() {
             match m {
                 Message::Set { component, total } => {
                     let pb = ProgressBar::new(total as u64)
