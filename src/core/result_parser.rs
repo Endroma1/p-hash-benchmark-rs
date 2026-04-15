@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[async_trait]
-pub trait ResultParser {
+pub trait ResultParser: Send + Sync {
     async fn parse(
         &self,
         results: AppProcessResult,

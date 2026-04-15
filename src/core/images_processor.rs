@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// Parses input images given by img_proc::Image data struct.
-pub trait ImagesProcessor {
+pub trait ImagesProcessor: Send + Sync {
     fn run(
         &self,
         images: Vec<Image>,

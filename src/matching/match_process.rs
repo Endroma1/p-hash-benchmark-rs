@@ -82,7 +82,7 @@ pub struct StateQuit;
 
 /// Pipelinerunner should run for every hashing method. Matching across methods would be useless
 #[async_trait]
-pub trait PipelineRunner {
+pub trait PipelineRunner: Send + Sync {
     async fn run(&self, hashing_methods: &HashingMethods) -> Result<(), Error>;
 }
 

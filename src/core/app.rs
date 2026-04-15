@@ -1,17 +1,24 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 
 use crate::{
     core::{
         app_builder::{AppBuilder, Missing},
         error::Error,
-        images_processor::ImagesProcessor,
-        result_parser::ResultParser,
+        images_processor::{ImagesProcessor, RayonImagesProcessor},
+        result_parser::{ResultParser, SqliteResultParser},
         state::AppState,
     },
-    image_hash::HashingMethods,
-    image_modify::Modifications,
+    hashing_methods,
+    image_hash::{self, HashingMethods},
+    image_modify::{self, Modifications},
     image_parse::Images,
-    matching::match_process::PipelineRunner,
+    matching::match_process::{PipelineRunner, SqliteRunner},
+    modified_images,
 };
 
 pub struct App {
@@ -44,6 +51,9 @@ impl App {
     pub fn builder() -> AppBuilder<Missing, Missing, Missing, Missing, Missing> {
         AppBuilder::new()
     }
+    pub fn state(&self) -> &AppState {
+        &self.state
+    }
     pub async fn run(&self) -> Result<(), Error> {
         let images = Images::from_path(self.imgs_path.to_path_buf());
         let images = images
@@ -75,5 +85,50 @@ impl App {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn try_default() -> Result<Self, Error> {
+        // Choosing what method to process images with.
+        let processor = Box::new(RayonImagesProcessor::default());
+
+        let pool = SqlitePool::connect_with(
+            SqliteConnectOptions::from_str("sqlite:data.db")?
+                .create_if_missing(true)
+                .pragma("cache_size", "200000"),
+        )
+        .await?;
+
+        let parser = Box::new(SqliteResultParser::new(pool.clone()));
+        let match_process = Box::new(SqliteRunner::new(pool.clone()));
+
+        let example_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("images");
+
+        tracing::info!("Using path {:?}", example_dir);
+
+        // What modifications that should be used.
+        let modifications =
+            modified_images![image_modify::Angle::Rot90, image_modify::Blur::new(0.9),];
+
+        // What hashing methods that should be used.
+        let hashing_methods = hashing_methods![
+            image_hash::AverageHash::new(8),
+            image_hash::AverageHash::new(16),
+            image_hash::AverageHash::new(64),
+            image_hash::AverageHash::new(256),
+            image_hash::VertGradient::new(8),
+            image_hash::VertGradient::new(16),
+            image_hash::VertGradient::new(64),
+            image_hash::VertGradient::new(256)
+        ];
+
+        let app = App::builder()
+            .images_path(&example_dir)
+            .images_processor(processor)
+            .results_parser(parser)
+            .match_process(match_process)
+            .modifications(modifications)
+            .hashing_methods(hashing_methods)
+            .finish();
+        Ok(app)
     }
 }
