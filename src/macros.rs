@@ -19,7 +19,7 @@ macro_rules! hashing_methods {
 }
 
 #[macro_export]
-macro_rules! modified_images {
+macro_rules! modifications {
     [$($x:expr),* $(,)?] => {
         {
             $crate::methods!(Modifications[$($x),*])
