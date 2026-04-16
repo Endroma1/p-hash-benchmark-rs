@@ -6,7 +6,7 @@ use p_hash::{
     image_hash::{self, HashingMethods},
     image_modify::{self, Modifications},
     matching::match_process::SqliteRunner,
-    modified_images,
+    modifications,
 };
 use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Using path {:?}", example_dir);
 
     // What modifications that should be used.
-    let modifications = modified_images![
+    let modifications = modifications![
         image_modify::Angle::Rot180,
         image_modify::Angle::Rot90,
         image_modify::Angle::Rot270,

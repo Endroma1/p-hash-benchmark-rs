@@ -3,6 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use bitvec::view::BitViewSized;
 use crossbeam::channel::{RecvError, bounded};
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
@@ -103,10 +104,13 @@ impl DerefMut for Matches {
         &mut self.matches
     }
 }
-#[derive(Debug)]
+#[derive(Debug, FromRow)]
 pub struct Match {
+    #[sqlx(rename = "hash1_id")]
     hash_id1: u32,
+    #[sqlx(rename = "hash2_id")]
     hash_id2: u32,
+    #[sqlx(flatten)]
     hamming_distance: HammingDistance,
 }
 impl Match {
@@ -127,9 +131,11 @@ impl Match {
         &self.hamming_distance
     }
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, FromRow)]
 pub struct HammingDistance {
+    #[sqlx(rename = "hamming_distance")]
     distance: u32,
+    #[sqlx(rename = "hash_len")]
     entry_length: u32,
 }
 impl HammingDistance {
@@ -144,5 +150,8 @@ impl HammingDistance {
     }
     pub fn entry_length(&self) -> u32 {
         self.entry_length
+    }
+    pub fn relative(&self) -> f32 {
+        self.distance as f32 / self.entry_length as f32
     }
 }

@@ -1,3 +1,4 @@
+use sqlx::prelude::FromRow;
 use std::{
     ffi::OsString,
     fmt::Display,
@@ -7,8 +8,9 @@ use std::{
 use tracing::debug;
 
 use walkdir::{DirEntry, WalkDir};
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, FromRow)]
 pub struct Image {
+    #[sqlx(try_from = "String")]
     path: PathBuf,
     user: String,
 }

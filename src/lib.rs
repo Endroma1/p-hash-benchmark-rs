@@ -6,3 +6,4 @@ pub mod image_hash;
 pub mod image_modify;
 pub mod image_parse;
 pub mod matching;
+pub mod result_calc;
