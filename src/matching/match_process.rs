@@ -5,7 +5,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use sqlx::SqlitePool;
 
 use crate::{
-    image_hash::HashingMethods,
+    image_hash::{HashingMethods, SelectedHashingMethods},
     matching::{
         error::Error,
         fetcher::{ResultsFetcher, SqliteFetcher},
@@ -32,7 +32,7 @@ impl<E, M, R> MatchPipeline<E, M, R> {
             parser,
         }
     }
-    pub async fn execute(&self, hashing_methods: &HashingMethods) -> Result<(), E> {
+    pub async fn execute<'a>(&self, hashing_methods: &SelectedHashingMethods<'a>) -> Result<(), E> {
         let state = MatchState::new();
 
         indicatif_view(state.clone());
@@ -83,7 +83,7 @@ pub struct StateQuit;
 /// Pipelinerunner should run for every hashing method. Matching across methods would be useless
 #[async_trait]
 pub trait PipelineRunner: Send + Sync {
-    async fn run(&self, hashing_methods: &HashingMethods) -> Result<(), Error>;
+    async fn run(&self, hashing_methods: &SelectedHashingMethods) -> Result<(), Error>;
 }
 
 pub struct SqliteRunner {
@@ -97,7 +97,7 @@ impl SqliteRunner {
 impl PipelineRunner for SqliteRunner {
     fn run<'life0, 'life1, 'async_trait>(
         &'life0 self,
-        hashing_methods: &'life1 HashingMethods,
+        hashing_methods: &'life1 SelectedHashingMethods,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<(), Error>>

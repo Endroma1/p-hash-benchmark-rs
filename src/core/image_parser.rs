@@ -1,7 +1,7 @@
 use crate::{
     core::{Error, app_proc::AppProcess, images_processor::PHashResult},
-    image_hash::HashingMethods,
-    image_modify::Modifications,
+    image_hash::{HashingMethods, SelectedHashingMethods},
+    image_modify::{Modifications, SelectedModifications},
     image_parse::Image,
 };
 /// Parses one image and returns a PHashResult which reperensents the modified images and hashes
@@ -11,8 +11,8 @@ pub trait ImageParser: Sync + Send {
         &self,
         image: &Image,
         id: u32,
-        modifications: &Modifications,
-        hashing_methods: &HashingMethods,
+        modifications: &SelectedModifications,
+        hashing_methods: &SelectedHashingMethods,
     ) -> Result<PHashResult, Error>;
 }
 #[derive(Debug, Default)]
@@ -22,8 +22,8 @@ impl ImageParser for AppProcParser {
         &self,
         image: &Image,
         id: u32,
-        modifications: &Modifications,
-        hashing_methods: &HashingMethods,
+        modifications: &SelectedModifications,
+        hashing_methods: &SelectedHashingMethods,
     ) -> Result<PHashResult, Error> {
         let mut app_proc = AppProcess::new();
         app_proc.run(image.get_path(), id, modifications, hashing_methods)?;

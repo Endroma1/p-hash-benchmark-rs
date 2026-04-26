@@ -14,8 +14,8 @@ use crate::{
         image_parser::{AppProcParser, ImageParser},
         state::{AppProcessResult, Hashes, Images},
     },
-    image_hash::HashingMethods,
-    image_modify::{Modifications, ModifiedImages},
+    image_hash::{HashingMethods, SelectedHashingMethods},
+    image_modify::{Modifications, ModifiedImages, SelectedModifications},
     image_parse::Image,
 };
 
@@ -24,8 +24,8 @@ pub trait ImagesProcessor: Send + Sync {
     fn run(
         &self,
         images: Vec<Image>,
-        modifications: &Modifications,
-        hashing_methods: &HashingMethods,
+        modifications: &SelectedModifications,
+        hashing_methods: &SelectedHashingMethods,
     ) -> AppProcessResult;
 }
 pub struct RayonImagesProcessor {
@@ -35,8 +35,8 @@ impl ImagesProcessor for RayonImagesProcessor {
     fn run(
         &self,
         images: Vec<Image>,
-        modifications: &Modifications,
-        hashing_methods: &HashingMethods,
+        modifications: &SelectedModifications,
+        hashing_methods: &SelectedHashingMethods,
     ) -> AppProcessResult {
         let (s, r) = unbounded();
         let style = ProgressStyle::with_template(

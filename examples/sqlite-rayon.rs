@@ -60,13 +60,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     let app = App::builder()
-        .images_path(&example_dir)
+        .imgs_path(&example_dir)
         .images_processor(processor)
         .results_parser(parser)
         .match_process(match_process)
         .modifications(modifications)
         .hashing_methods(hashing_methods)
         .finish();
+
+    // Set what methods that should be used in this run
+    app.set_selected_hashing_methods(vec![1, 2, 3]);
+    app.set_selected_modifications(vec![1, 2, 3]);
 
     if let Err(e) = app.run().await {
         tracing::error!("{e}");

@@ -17,14 +17,53 @@
   border-bottom: solid;
 }
 
+.div-list {
+  display: flex;
+  flex-direction: column;
+}
+.image_path {
+    min-width: 100px;
+}
+
+.div-list button {
+  border: none;
+  background: none;
+}
+
 .info>div {
   padding: 10px;
-  display: inline-block
+  display: inline-block;
 }
 
 .info {
   display: flex;
 }
+
+.flex{
+    display: flex;
+    flex-direction: column;
+}
+
+.info h2,
+h3,
+h4 {
+  display: inline-flex;
+}
+
+.app {
+  display: flex;
+  gap: 10px;
+}
+
+.app-init {
+  border-collapse: collapse;
+  border: 2px solid rgb(200, 200, 200);
+  letter-spacing: 1px;
+  font-size: 0.8rem;
+  min-width: 60px;
+  min-height: 10px;
+}
+
 
 html {
   background-color: #f7f7f7f7;

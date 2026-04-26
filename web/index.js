@@ -68,5 +68,21 @@ async function displayApp() {
   }
 }
 
+async function AppInit() {
+  const button = document.querySelector(".app-init")
+  button.onclick = async () => {
+    try {
+      await utils.appInit()
+    } catch (error) {
+      console.log(error.message)
+      // Show error to user when implemented
+    }
+    location.reload() // Reload app status
+
+  }
+}
+
 displayRuns()
 displayApp()
+AppInit()
+utils.displayTopBar()

@@ -3,21 +3,19 @@ use std::fmt::Display;
 use bitvec::prelude::*;
 use image::DynamicImage;
 
-use crate::image_hash::{HashingMethods, collection::HashResult};
+use crate::image_hash::{HashingMethods, SelectedHashingMethods, collection::HashResult};
 
 pub trait HashingMethod: Send + Sync {
     fn hash(&self, img: &DynamicImage) -> Hash;
     fn name(&self) -> String;
 }
-pub fn hash_images(
-    img: DynamicImage,
-    hashing_methods: &HashingMethods,
-) -> impl Iterator<Item = HashResult> + '_ {
+pub fn hash_images(img: DynamicImage, hashing_methods: &SelectedHashingMethods) -> Vec<HashResult> {
     // Hashes image with hashing methods that correlate to the given ids
     hashing_methods
         .iter()
         .enumerate()
         .map(move |(id, method)| HashResult::new(method.hash(&img), id as u16))
+        .collect()
 }
 
 #[derive(Debug)]

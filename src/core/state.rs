@@ -1,6 +1,5 @@
 use std::{
-    ops::{Deref, DerefMut},
-    sync::{Arc, mpsc},
+    ops::{Deref, DerefMut}, path::PathBuf, sync::{Arc, mpsc}
 };
 
 use sqlx::SqlitePool;
@@ -34,22 +33,73 @@ impl AppState {
         let res = rx.recv().unwrap();
         res
     }
+
+    pub fn set_run_hashes(&self, ids: Vec<usize>) {
+        self.handler.send(Message::SetRunHashes(ids));
+    }
+    pub fn set_run_modifications(&self, ids: Vec<usize>) {
+        self.handler.send(Message::SetRunModifications(ids));
+    }
+    pub fn get_run_hashes(&self) -> Vec<usize> {
+        let (tx, rx) = oneshot::channel();
+        self.handler.send(Message::GetRunHashes(tx));
+        rx.recv().unwrap()
+    }
+    pub fn get_run_modifications(&self) -> Vec<usize> {
+        let (tx, rx) = oneshot::channel();
+        self.handler.send(Message::GetRunHashes(tx)).unwrap();
+        rx.recv().unwrap()
+    }
+    pub fn get_running_state(&self) -> RunningState {
+        let (tx, rx) = oneshot::channel();
+        self.handler.send(Message::GetRunningState(tx));
+        rx.recv().unwrap()
+    }
+    pub fn set_running_state(&self, state: RunningState) {
+        self.handler.send(Message::SetRunningState(state)).unwrap();
+    }
+    pub fn set_path(&self, path: impl Into<PathBuf>){
+        self.handler.send(Message::SetPath(path.into())).unwrap();
+    }
+    pub fn get_path(&self) -> PathBuf{
+        let (tx, rx) = oneshot::channel();
+        self.handler.send(Message::GetPath(tx)).unwrap();
+        rx.recv().unwrap()
+    }
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+pub enum RunningState {
+    Running,
+    #[default]
+    Stopped,
+}
+
+#[derive(Default)]
 pub struct AppStateBuilder {
+    path: PathBuf,
+
     hashes: Arc<HashingMethods>,
     modifications: Arc<Modifications>,
+
+    // Selected hashes
+    run_hashes: Vec<usize>,
+    // Selected modifications
+    run_modifications: Vec<usize>,
+
+    state: RunningState,
 }
 impl AppStateBuilder {
     pub fn new(hashes: HashingMethods, modifications: Modifications) -> Self {
         Self {
             hashes: Arc::new(hashes),
             modifications: Arc::new(modifications),
+            ..Default::default()
         }
     }
 
     /// Spawns app state and returns handler
-    pub fn spawn_app_state(self) -> mpsc::Sender<Message> {
+    pub fn spawn_app_state(mut self) -> mpsc::Sender<Message> {
         let (tx, rx) = mpsc::channel();
         rayon::spawn(move || {
             while let Ok(m) = rx.recv() {
@@ -64,6 +114,30 @@ impl AppStateBuilder {
                             break;
                         };
                     }
+                    Message::SetRunModifications(m) => self.run_modifications = m,
+                    Message::SetRunHashes(m) => self.run_hashes = m,
+                    Message::GetRunHashes(r) => {
+                        if r.send(self.run_hashes.clone()).is_err() {
+                            break;
+                        };
+                    }
+                    Message::GetRunModifications(r) => {
+                        if r.send(self.run_modifications.clone()).is_err() {
+                            break;
+                        };
+                    }
+                    Message::SetRunningState(s) => self.state = s,
+                    Message::GetRunningState(r) => {
+                        if r.send(self.state).is_err() {
+                            break;
+                        }
+                    }
+                    Message::SetPath(p) => self.path = p,
+                    Message::GetPath(r) => {
+                        if r.send(self.path.clone()).is_err(){
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -73,6 +147,14 @@ impl AppStateBuilder {
 pub enum Message {
     HashingMethods(oneshot::Sender<Arc<HashingMethods>>),
     Modifications(oneshot::Sender<Arc<Modifications>>),
+    SetRunModifications(Vec<usize>),
+    SetRunHashes(Vec<usize>),
+    GetRunModifications(oneshot::Sender<Vec<usize>>),
+    GetRunHashes(oneshot::Sender<Vec<usize>>),
+    GetRunningState(oneshot::Sender<RunningState>),
+    SetRunningState(RunningState),
+    SetPath(PathBuf),
+    GetPath(oneshot::Sender<PathBuf>)
 }
 
 #[derive(Debug)]

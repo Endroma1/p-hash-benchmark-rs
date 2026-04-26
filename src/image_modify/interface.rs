@@ -30,6 +30,32 @@ impl Modifications {
     pub fn push(&mut self, modification: impl ImageModification + 'static) {
         self.methods.push(Box::new(modification));
     }
+    pub fn select(&self, ids: &[usize]) -> SelectedModifications<'_> {
+        let methods = self
+            .methods
+            .iter()
+            .enumerate()
+            .filter_map(|(i, m)| {
+                // Slow but whatever
+                if ids.contains(&i) {
+                    Some(m.as_ref())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        SelectedModifications { methods }
+    }
+}
+
+pub struct SelectedModifications<'a> {
+    methods: Vec<&'a dyn ImageModification>,
+}
+impl<'a> Deref for SelectedModifications<'a> {
+    type Target = [&'a dyn ImageModification];
+    fn deref(&self) -> &Self::Target {
+        &self.methods
+    }
 }
 
 pub trait ImageModification: Send + Sync {
@@ -62,8 +88,8 @@ impl ModifiedImage {
 
 pub fn modify_image<'a>(
     path: &Path,
-    modifications: &'a Modifications,
-) -> Result<impl Iterator<Item = ModifiedImage> + 'a, Error> {
+    modifications: &SelectedModifications<'a>,
+) -> Result<Vec<ModifiedImage>, Error> {
     // Modifies image with the modifications that matches the ids.
     let img = ImageReader::open(path)?.decode()?;
 
@@ -73,6 +99,7 @@ pub fn modify_image<'a>(
         .map(move |(id, modification)| {
             let mod_img = modification.apply(&img);
             ModifiedImage::new(mod_img, id as u16)
-        });
+        })
+        .collect();
     Ok(modified_images)
 }

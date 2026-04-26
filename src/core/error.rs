@@ -13,6 +13,7 @@ pub enum Error {
     Sqlx { err: sqlx::Error },
     HomeDirNotFound,
     MatchError { err: matching::error::Error },
+    AppAlreadyRunning,
 }
 impl From<matching::error::Error> for Error {
     fn from(value: matching::error::Error) -> Self {
@@ -49,6 +50,7 @@ impl Display for Error {
             Self::Sqlx { err } => write!(f, "Sqlx Error: {}", err),
             Self::HomeDirNotFound => write!(f, "Home dir not found"),
             Self::MatchError { err } => write!(f, "Error when matching: {}", err),
+            Self::AppAlreadyRunning => write!(f, "App is already running"),
         }
     }
 }

@@ -13,6 +13,18 @@ impl HashingMethods {
     pub fn push(&mut self, method: impl HashingMethod + 'static) {
         self.methods.push(Box::new(method));
     }
+    pub fn select(&self, ids: &[usize]) -> SelectedHashingMethods {
+        let methods = self
+            .methods
+            .iter()
+            .enumerate()
+            .filter_map(|(i, m)| match ids.contains(&i) {
+                true => Some(m.as_ref()),
+                false => None,
+            })
+            .collect();
+        SelectedHashingMethods { methods }
+    }
 }
 impl Deref for HashingMethods {
     type Target = Vec<Box<dyn HashingMethod>>;
@@ -24,6 +36,16 @@ impl Deref for HashingMethods {
 impl DerefMut for HashingMethods {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.methods
+    }
+}
+
+pub struct SelectedHashingMethods<'a> {
+    methods: Vec<&'a dyn HashingMethod>,
+}
+impl<'a> Deref for SelectedHashingMethods<'a> {
+    type Target = Vec<&'a dyn HashingMethod>;
+    fn deref(&self) -> &Self::Target {
+        &self.methods
     }
 }
 

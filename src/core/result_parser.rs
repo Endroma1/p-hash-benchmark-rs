@@ -6,8 +6,8 @@ use sqlx::SqlitePool;
 use crate::{
     core::{error::Error, state::AppProcessResult},
     db::DB,
-    image_hash::HashingMethods,
-    image_modify::Modifications,
+    image_hash::{HashingMethods, SelectedHashingMethods},
+    image_modify::{Modifications, SelectedModifications},
 };
 
 #[async_trait]
@@ -15,8 +15,8 @@ pub trait ResultParser: Send + Sync {
     async fn parse(
         &self,
         results: AppProcessResult,
-        modifications: &Modifications,
-        hashing_methods: &HashingMethods,
+        modifications: &SelectedModifications,
+        hashing_methods: &SelectedHashingMethods,
     ) -> Result<(), Error>;
 }
 
@@ -32,8 +32,8 @@ impl ResultParser for SqliteResultParser {
     fn parse<'life0, 'life1, 'life2, 'async_trait>(
         &'life0 self,
         results: AppProcessResult,
-        modifications: &'life1 Modifications,
-        hashing_methods: &'life2 HashingMethods,
+        modifications: &'life1 SelectedModifications,
+        hashing_methods: &'life2 SelectedHashingMethods,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = Result<(), Error>>
@@ -50,7 +50,7 @@ impl ResultParser for SqliteResultParser {
         Box::pin(async move {
             DB::create_db().await?;
             send_hashes_to_db(&self.pool, hashing_methods).await?;
-            send_modifications_to_db(&self.pool, &modifications).await?;
+            send_modifications_to_db(&self.pool, modifications).await?;
 
             let run_id = create_run(&self.pool).await?;
             create_program(&self.pool, run_id).await?;
@@ -121,9 +121,9 @@ async fn create_run(pool: &SqlitePool) -> Result<i64, Error> {
     Ok(res.last_insert_rowid())
 }
 
-async fn send_modifications_to_db(
+async fn send_modifications_to_db<'a>(
     pool: &SqlitePool,
-    modifications: &Modifications,
+    modifications: &SelectedModifications<'a>,
 ) -> Result<(), Error> {
     let mut tx = pool.begin().await?;
     for (i, modification) in modifications.iter().enumerate() {
@@ -142,9 +142,9 @@ async fn send_modifications_to_db(
     Ok(())
 }
 
-async fn send_hashes_to_db(
+async fn send_hashes_to_db<'a>(
     pool: &SqlitePool,
-    hashing_methods: &HashingMethods,
+    hashing_methods: &SelectedHashingMethods<'a>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     for (id, obj) in hashing_methods.iter().enumerate() {

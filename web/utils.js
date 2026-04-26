@@ -38,3 +38,41 @@ export async function getAppInfo() {
   }
   return await response.json()
 }
+
+export async function appInit() {
+  const response = await fetch("http://127.0.0.1:8080/app/init")
+  if (!response.ok) {
+    throw new Error(`Response status: ${response.status}`)
+  }
+}
+
+export async function getHashingMethods() {
+  const response = await fetch("http://127.0.0.1:8080/hashing_methods")
+  if (!response.ok) {
+    throw new Error(`Response status: ${response.status}`)
+  }
+  return await response.json()
+}
+export async function getModifications() {
+  const response = await fetch("http://127.0.0.1:8080/modifications")
+  if (!response.ok) {
+    throw new Error(`Response status: ${response.status}`)
+  }
+  return await response.json()
+}
+
+export function displayTopBar() {
+  let body = document.querySelector("body")
+
+  let top_bar = document.createElement("div")
+  top_bar.className = "top_bar"
+  body.prepend(top_bar)
+
+  let title = document.createElement("div")
+  title.className = "title"
+  top_bar.appendChild(title)
+
+  let header = document.createElement("h1")
+  header.textContent = "PHash"
+  title.appendChild(header)
+}

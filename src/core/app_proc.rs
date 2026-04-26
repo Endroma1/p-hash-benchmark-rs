@@ -6,8 +6,8 @@ use crate::{
         images_processor::PHashResult,
         state::{self, Hash, ModifiedImage},
     },
-    image_hash::{HashingMethods, hash_images},
-    image_modify::{Modifications, ModifiedImages, modify_image},
+    image_hash::{HashingMethods, SelectedHashingMethods, hash_images},
+    image_modify::{Modifications, ModifiedImages, SelectedModifications, modify_image},
 };
 
 #[derive(Default)]
@@ -25,8 +25,8 @@ impl AppProcess {
         &mut self,
         img_path: &Path,
         img_id: u32,
-        modifications: &Modifications,
-        hashing_methods: &HashingMethods,
+        modifications: &SelectedModifications,
+        hashing_methods: &SelectedHashingMethods,
     ) -> Result<(), Error> {
         let modified_images = Self::modify_image(img_path, img_id, modifications)?;
         self.result.set_mod_imgs(modified_images);
@@ -43,11 +43,13 @@ impl AppProcess {
     fn modify_image(
         img_path: &Path,
         img_id: u32,
-        modifications: &Modifications,
+        modifications: &SelectedModifications,
     ) -> Result<ModifiedImages, Error> {
         let modified_images = modify_image(img_path, modifications)?;
 
-        let mod_imgs_state = modified_images.map(|i| ModifiedImage::new(img_id, i));
+        let mod_imgs_state = modified_images
+            .into_iter()
+            .map(|i| ModifiedImage::new(img_id, i));
 
         Ok(ModifiedImages::from(
             mod_imgs_state.collect::<Vec<state::ModifiedImage>>(),
@@ -56,7 +58,7 @@ impl AppProcess {
     fn hash_image(
         &mut self,
         mod_img_id: u32,
-        hashing_methods: &HashingMethods,
+        hashing_methods: &SelectedHashingMethods,
     ) -> Result<(), Error> {
         let img = {
             let modified_image = self.result.mod_imgs().get_img(mod_img_id)?;
@@ -64,11 +66,13 @@ impl AppProcess {
             modified_image.get_img().ok_or(Error::ImageHandleClosed)?
         };
 
-        hash_images(img.clone(), hashing_methods).for_each(|r| {
-            self.result
-                .hashes_mut()
-                .insert_hash(Hash::new(mod_img_id, r));
-        });
+        hash_images(img.clone(), hashing_methods)
+            .into_iter()
+            .for_each(|r| {
+                self.result
+                    .hashes_mut()
+                    .insert_hash(Hash::new(mod_img_id, r));
+            });
 
         self.result
             .mod_imgs_mut()

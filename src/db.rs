@@ -1,6 +1,6 @@
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
+use sqlx::{SqlitePool, sqlite::{self, SqliteConnectOptions}};
 pub struct DB {}
 impl DB {
     pub fn new() -> Self {
@@ -168,3 +168,22 @@ JOIN program p ON p.run_id = ri.run_id;
         Ok(())
     }
 }
+
+/// Inserts a user and its images
+pub async fn insert_user_image(pool: SqlitePool, username: &str, images: Vec<PathBuf>)-> Result<(), sqlx::Error>{
+    let mut tx  = pool.begin().await?;
+    for image in images {
+            sqlx::query(
+                "
+            INSERT INTO images (path, user) VALUES (?, ?) ON CONFLICT(id) DO NOTHING;
+            ",
+            )
+            .bind(username)
+            .bind(image.to_str())
+            .execute(&mut *tx)
+            .await?;
+        }
+    tx.commit().await?;
+    Ok(())
+}
+

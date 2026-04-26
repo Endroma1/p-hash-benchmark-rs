@@ -18,7 +18,7 @@ use crate::{
     image_modify::{self, Modifications},
     image_parse::Images,
     matching::match_process::{PipelineRunner, SqliteRunner},
-    modified_images,
+    modifications,
 };
 
 pub struct App {
@@ -48,13 +48,31 @@ impl App {
             state,
         }
     }
-    pub fn builder() -> AppBuilder<Missing, Missing, Missing, Missing, Missing> {
+    pub fn builder() -> AppBuilder<Missing, Missing, Missing, Missing, Missing, Missing> {
         AppBuilder::new()
     }
     pub fn state(&self) -> &AppState {
         &self.state
     }
+    pub fn set_selected_modifications(&self, ids: Vec<usize>) {
+        self.state.set_run_modifications(ids);
+    }
+    pub fn set_selected_hashing_methods(&self, ids: Vec<usize>) {
+        self.state.set_run_hashes(ids);
+    }
+    pub fn set_path(&self, path: impl Into<PathBuf>){
+        self.state.set_path(path);
+    }
+    pub fn get_path(&self){
+        self.state.get_path();
+    }
     pub async fn run(&self) -> Result<(), Error> {
+        if let crate::core::state::RunningState::Running = self.state.get_running_state() {
+            return Err(Error::AppAlreadyRunning);
+        }
+        self.state
+            .set_running_state(crate::core::state::RunningState::Running);
+
         let images = Images::from_path(self.imgs_path.to_path_buf());
         let images = images
             .filter_map(|r| {
@@ -66,23 +84,24 @@ impl App {
             .collect();
 
         tracing::info!("starting image hashing");
-        let res = self.images_processor.run(
-            images,
-            &self.state.modifications(),
-            &self.state.hashing_methods(),
-        );
+
+        let modifications = self.state.modifications();
+
+        let modifications_selected = modifications.select(&self.state.get_run_modifications());
+
+        let hashing_methods = self.state.hashing_methods();
+
+        let hashing_methods_selected = hashing_methods.select(&self.state.get_run_hashes());
+
+        let res =
+            self.images_processor
+                .run(images, &modifications_selected, &hashing_methods_selected);
 
         tracing::info!("sending results to db");
         self.results_parser
-            .parse(
-                res,
-                &self.state.modifications(),
-                &self.state.hashing_methods(),
-            )
+            .parse(res, &modifications_selected, &hashing_methods_selected)
             .await?;
-        self.match_process
-            .run(&self.state.hashing_methods())
-            .await?;
+        self.match_process.run(&hashing_methods_selected).await?;
 
         Ok(())
     }
@@ -101,13 +120,13 @@ impl App {
         let parser = Box::new(SqliteResultParser::new(pool.clone()));
         let match_process = Box::new(SqliteRunner::new(pool.clone()));
 
-        let example_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("images");
+        let example_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("images");
 
         tracing::info!("Using path {:?}", example_dir);
 
         // What modifications that should be used.
         let modifications =
-            modified_images![image_modify::Angle::Rot90, image_modify::Blur::new(0.9),];
+            modifications![image_modify::Angle::Rot90, image_modify::Blur::new(0.9),];
 
         // What hashing methods that should be used.
         let hashing_methods = hashing_methods![
@@ -122,7 +141,7 @@ impl App {
         ];
 
         let app = App::builder()
-            .images_path(&example_dir)
+            .imgs_path(&example_dir)
             .images_processor(processor)
             .results_parser(parser)
             .match_process(match_process)
